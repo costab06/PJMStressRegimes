@@ -101,11 +101,25 @@ def annotate_window(df: pd.DataFrame, event: pd.Series) -> pd.DataFrame:
 
 
 def compute_coverage(df: pd.DataFrame, event: pd.Series) -> dict:
-    """Compute per-event data coverage statistics."""
-    # Window we expect to be populated
+    """Compute per-event data coverage statistics.
+
+    expected_hours is derived from an explicit pd.date_range over the window
+    (floor to hour at both ends) rather than from elapsed seconds, so that
+    sub-hour window boundaries and DST transitions never produce negative
+    missing_pct or off-by-one expected counts.
+
+    missing_pct uses observed unique UTC timestamps as the numerator against
+    the explicit expected index, per the formula:
+        missing_pct = 100 * (1 - N_observed_unique / N_expected)
+    """
     win_start = event["window_start"] - pd.Timedelta(hours=PRE_HOURS)
     win_end = event["event_end"] + pd.Timedelta(hours=POST_HOURS)
-    expected_hours = int((win_end - win_start).total_seconds() / 3600) + 1
+
+    # Explicit UTC hourly index — the ground truth for expected coverage
+    expected_index = pd.date_range(
+        win_start.floor("h"), win_end.floor("h"), freq="h", tz="UTC"
+    )
+    expected_hours = len(expected_index)
 
     def _count(col: str) -> int:
         if col not in df.columns:
@@ -120,8 +134,14 @@ def compute_coverage(df: pd.DataFrame, event: pd.Series) -> dict:
     # Weather hours will be filled in by the NOAA ingest step (future)
     weather_h = 0
 
-    core_min = min(demand_h, forecast_h, interchange_h)
-    missing_pct = round((1 - core_min / max(expected_hours, 1)) * 100, 1)
+    # N_observed_unique: hours present in the data for all three core columns
+    core_cols = [c for c in ["demand_mwh", "forecast_mwh", "interchange_mwh"]
+                 if c in df.columns]
+    if core_cols and "timestamp_utc" in df.columns:
+        n_observed = int(df.dropna(subset=core_cols)["timestamp_utc"].nunique())
+    else:
+        n_observed = 0
+    missing_pct = round(100 * (1 - n_observed / max(expected_hours, 1)), 1)
 
     return {
         "event_id": event["event_id"],
@@ -181,9 +201,9 @@ def run(
 
         try:
             df = fetch_event_data(event, skip_generation=skip_generation)
-        except ValueError as exc:
-            # Pre-2019 data not available via EIA v2 API
-            print(f"  SKIP: {exc}")
+        except FileNotFoundError as exc:
+            # Bulk file not yet downloaded (pre-2019 window, no internet or file missing)
+            print(f"  SKIP (bulk file unavailable): {exc}")
             coverage_rows.append({
                 "event_id": event["event_id"],
                 "window_start": (event["window_start"] - pd.Timedelta(hours=PRE_HOURS)).isoformat(),
@@ -195,7 +215,7 @@ def run(
                 "interchange_hours": 0,
                 "weather_hours": 0,
                 "missing_pct": None,
-                "notes": str(exc),
+                "notes": f"bulk_unavailable: {exc}",
             })
             continue
         except Exception as exc:
@@ -247,7 +267,12 @@ def run(
         print(f"\nCoverage table → {cov_path.relative_to(PROJECT_ROOT)}")
         print(coverage_df.to_string(index=False))
 
-        incomplete = coverage_df[coverage_df["missing_pct"] >= 5]
+        skipped = coverage_df[coverage_df["missing_pct"].isna()]
+        incomplete = coverage_df[coverage_df["missing_pct"].notna() & (coverage_df["missing_pct"] >= 5)]
+        if not skipped.empty:
+            print(f"\nSKIPPED ({len(skipped)} event(s) — no EIA data available):")
+            for _, row in skipped.iterrows():
+                print(f"  {row['event_id']}: {row['notes'][:80]}")
         if not incomplete.empty:
             print("\nWARNING: the following events have >5% missing core data:")
             print(incomplete[["event_id", "missing_pct"]].to_string(index=False))
@@ -276,7 +301,7 @@ def main() -> None:
         halt_on_fail=args.halt_on_fail,
     )
     if not coverage.empty:
-        incomplete = coverage[coverage["missing_pct"] >= 5]
+        incomplete = coverage[coverage["missing_pct"].notna() & (coverage["missing_pct"] >= 5)]
         sys.exit(1 if not incomplete.empty else 0)
 
 

@@ -198,15 +198,21 @@ def fetch_window(
     t1 = pd.Timestamp(end, tz="UTC")
 
     if t1 < EIA_V2_START:
-        raise ValueError(
-            f"Requested window {t0.date()} – {t1.date()} is entirely before "
-            f"EIA v2 API availability ({EIA_V2_START.date()}). "
-            f"Use EIA bulk historical files for pre-2019 data."
-        )
+        # Entire window is pre-2019 — delegate entirely to the bulk path
+        from gridregime.ingest.eia930_bulk import fetch_window_bulk
+        print(f"  Pre-2019 window: routing to EIA bulk download path.")
+        return fetch_window_bulk(ba, start, end, cache_dir / "bulk")
     if t0 < EIA_V2_START:
-        print(f"  Warning: window starts before EIA v2 start ({EIA_V2_START.date()}); "
-              f"trimming to {EIA_V2_START.date()}.")
-        t0 = EIA_V2_START
+        # Partial overlap: fetch bulk for the pre-2019 portion, API for the rest,
+        # then concatenate. In practice all current events are either fully pre-
+        # or fully post-2019, so this branch is defensive.
+        from gridregime.ingest.eia930_bulk import fetch_window_bulk
+        split = EIA_V2_START.strftime("%Y-%m-%dT%H")
+        print(f"  Window straddles EIA v2 start; fetching bulk for pre-{split} portion.")
+        bulk_df = fetch_window_bulk(ba, start, split, cache_dir / "bulk")
+        api_df = fetch_window(ba, split, end, cache_dir, skip_generation)
+        combined = pd.concat([bulk_df, api_df], ignore_index=True)
+        return combined.drop_duplicates("timestamp_utc").sort_values("timestamp_utc").reset_index(drop=True)
 
     # Build list of calendar months to fetch. pandas date_range with freq="MS"
     # raises ValueError on tz-aware inputs in pandas 2.x, so we iterate manually.
