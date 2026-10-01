@@ -156,8 +156,14 @@ def run(skip_generation: bool = False, dry_run: bool = False) -> pd.DataFrame:
         print(f"Event: {event['event_id']}  ({event['event_name']})")
 
         if dry_run:
-            print(f"  [dry-run] would fetch {event['region']} "
-                  f"{event['window_start']} → {event['event_end']}")
+            fetch_start = event["window_start"] - pd.Timedelta(hours=PRE_HOURS)
+            fetch_end = event["event_end"] + pd.Timedelta(hours=POST_HOURS)
+            bas = _ba_for_event(event["region"])
+            n_hours = int((fetch_end - fetch_start).total_seconds() / 3600) + 1
+            print(f"  [dry-run] BA={','.join(bas)}  "
+                  f"{fetch_start.strftime('%Y-%m-%dT%H:%MZ')} → "
+                  f"{fetch_end.strftime('%Y-%m-%dT%H:%MZ')}  "
+                  f"({n_hours}h)")
             continue
 
         try:
