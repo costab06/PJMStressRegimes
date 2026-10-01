@@ -1,0 +1,32 @@
+study:
+  name: grid-regime-study
+  description: >
+    Detect and characterize electricity grid stress regimes using hourly
+    operational data. Primary focus on Elliott Event (Dec 2022) versus
+    matched control periods, with retrospective analysis of 2003 blackout
+    and 2014 polar vortex.
+
+  time_range:
+    start: "2016-01-01"
+    end: "2023-12-31"
+
+  target_event:
+    name: Elliott
+    period: ["2022-12-23 00:00", "2022-12-26 23:00"]
+    timezone: UTC
+
+  historical_events:
+    - name: 2003_blackout
+      period: ["2003-08-14 00:00", "2003-08-16 23:00"]
+    - name: 2014_polar_vortex
+      period: ["2014-01-06 00:00", "2014-01-08 23:00"]
+
+  balance_authorities:
+    primary: [PJM, MISO, TVA, SOCO, DUK, CPLE, CPLW, FPC, FPL, GVL, HST, JEA, NSB, SEC, TEC, TAL, FGE]
+    neighbors: [NYIS, ISNE, LGEE, EKPC]
+
+  window_hours:
+    pre_event: 72
+    post_event: 72
+
+  lead_times_hours: [6, 12, 24, 48, 72]

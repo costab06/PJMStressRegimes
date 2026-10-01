@@ -1,0 +1,43 @@
+baseline:
+  method: seasonal_decompose
+  period: 8760  # annual hours
+  model: additive
+
+anomaly:
+  isolation_forest:
+    n_estimators: 200
+    contamination: 0.02
+    random_state: 42
+  lof:
+    n_neighbors: 20
+    contamination: 0.02
+  z_score_threshold: 3.0
+
+changepoint:
+  ruptures:
+    model: rbf
+    penalty: 10
+    min_size: 24
+  window_size: 168  # 1 week in hours
+
+hmm:
+  n_components: [2, 3, 4, 5]
+  covariance_type: full
+  n_iter: 200
+  random_state: 42
+  selection_criterion: bic
+
+xgboost:
+  n_estimators: 500
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  early_stopping_rounds: 50
+  random_state: 42
+
+evaluation:
+  cv_folds: 5
+  test_size: 0.2
+  shuffle: false  # time series — no shuffle
+  metrics: [roc_auc, precision, recall, f1, lead_time_hours]

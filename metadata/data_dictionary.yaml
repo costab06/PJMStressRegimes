@@ -1,0 +1,45 @@
+grid_hourly:
+  timestamp_utc:
+    type: datetime
+    description: Hour-ending timestamp in UTC
+  ba:
+    type: string
+    description: Balance Authority abbreviation (EIA codes)
+  demand_mwh:
+    type: float
+    description: Actual metered demand in MWh
+  demand_forecast_mwh:
+    type: float
+    description: Day-ahead demand forecast in MWh
+  demand_error_mwh:
+    type: float
+    description: demand_mwh - demand_forecast_mwh
+  net_generation_mwh:
+    type: float
+    description: Net generation by all fuels in MWh
+  interchange_mwh:
+    type: float
+    description: Net interchange (positive = import) in MWh
+  reserve_margin_pct:
+    type: float
+    description: Operating reserve margin as percentage of demand
+
+features:
+  demand_z:
+    type: float
+    description: Z-score of demand vs. trailing 30-day seasonal baseline
+  forecast_error_z:
+    type: float
+    description: Z-score of forecast error
+  interchange_anomaly:
+    type: float
+    description: Deviation of interchange from expected pattern
+  temp_deviation_c:
+    type: float
+    description: Temperature deviation from 30-year climatological normal
+  wind_speed_mps:
+    type: float
+    description: Mean wind speed across BA weather stations in m/s
+  neighbor_stress_index:
+    type: float
+    description: Composite stress score of neighboring BAs (0-1)

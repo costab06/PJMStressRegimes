@@ -1,0 +1,45 @@
+eia930:
+  description: EIA Form 930 hourly electric grid monitor data
+  base_url: https://www.eia.gov/electricity/gridmonitor/
+  api_url: https://api.eia.gov/v2/electricity/rto/
+  data_types:
+    - demand
+    - demand_forecast
+    - generation_by_fuel
+    - interchange
+  update_frequency: hourly
+  lag_hours: 1
+  local_path: data/raw/eia930/
+
+noaa:
+  description: NOAA ISD and GFS weather data
+  isd_url: https://www.ncdc.noaa.gov/isd
+  stations_file: config/noaa_stations.csv
+  variables:
+    - temperature_2m
+    - wind_speed
+    - wind_direction
+    - dewpoint
+    - cloud_cover
+    - precipitation
+  local_path: data/raw/noaa/
+
+pjm:
+  description: PJM dataminer2 operational data
+  base_url: https://dataminer2.pjm.com/api/
+  data_types:
+    - real_time_load
+    - day_ahead_load_forecast
+    - generation_by_fuel
+    - emergency_procedures
+  local_path: data/raw/pjm/
+
+historical:
+  description: Archived event data for retrospective analysis
+  sources:
+    2003_blackout:
+      description: August 2003 Northeast Blackout
+      local_path: data/raw/historical/2003_blackout/
+    2014_polar_vortex:
+      description: January 2014 Polar Vortex
+      local_path: data/raw/historical/2014_polar_vortex/

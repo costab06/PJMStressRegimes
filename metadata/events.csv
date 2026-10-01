@@ -1,0 +1,4 @@
+event_id,name,start_utc,end_utc,region,type,severity,source,notes
+E001,Elliott,2022-12-23 00:00,2022-12-26 23:00,SE/PJM,winter_storm,critical,NERC,Winter Storm Elliott; widespread generation outages
+E002,2003_blackout,2003-08-14 16:10,2003-08-16 23:00,NE/Midwest,cascade_failure,critical,DOE,Northeast blackout; 55M affected
+E003,2014_polar_vortex,2014-01-06 00:00,2014-01-08 23:00,Midwest/SE,cold_snap,severe,EIA,Record cold demand; ~40GW PJM peak reserve margin stress

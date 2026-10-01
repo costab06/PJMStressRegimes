@@ -1,0 +1,6 @@
+control_id,event_id,start_utc,end_utc,match_criteria,notes
+C001,E001,2021-12-23 00:00,2021-12-26 23:00,same_week_prior_year,2021 same period — milder winter
+C002,E001,2020-12-23 00:00,2020-12-26 23:00,same_week_prior_year,2020 same period
+C003,E001,2019-12-23 00:00,2019-12-26 23:00,same_week_prior_year,2019 same period
+C004,E001,2022-11-17 00:00,2022-11-20 23:00,same_season_similar_temp,Nov 2022 cold spell — no stress
+C005,E001,2022-02-03 00:00,2022-02-06 23:00,same_season_similar_temp,Feb 2022 cold period — no emergency
