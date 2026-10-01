@@ -1,7 +1,8 @@
-"""Milestone 1A pipeline: ingest → hourly state table → event windows → coverage.
+"""Milestone 1A pipeline: ingest → validate → event windows → coverage.
 
 Entry point:
-    python -m gridregime.pipeline.milestone_1a
+    python -m gridregime.pipeline.milestone_1a [--skip-generation] [--dry-run]
+                                               [--halt-on-fail]
 
 Steps
 -----
@@ -9,15 +10,17 @@ Steps
 2. For each event, determine the fetch window:
      [window_start - PRE_HOURS, event_end + POST_HOURS]
 3. Fetch EIA-930 for each required (BA, month) using the disk cache.
-4. Build the PJM hourly state table: one wide parquet per event, stored under
+4. Run post-ingest validation checks (timezone, DST, sentinels, gaps, bounds).
+   FAIL results are printed and, with --halt-on-fail, abort the run before
+   writing any downstream artifacts.
+5. Build the PJM hourly state table: one wide parquet per event under
      data/interim/eia930/{event_id}.parquet
-5. Extract the 72-hour analysis window and annotate hours_to_event.
-6. Write event windows to data/processed/event_windows.parquet.
-7. Compute and write results/tables/event_data_coverage.csv.
+6. Annotate hours_to_event and collect event windows.
+7. Write data/processed/event_windows.parquet.
+8. Compute and write results/tables/event_data_coverage.csv.
 
-No modelling occurs here. The coverage table is the Milestone 1A acceptance
-criterion: all positive and hard-negative events must show essentially complete
-demand / forecast / interchange coverage before proceeding.
+No modelling occurs here. All validation checks must pass before the coverage
+table is accepted as a Milestone 1A artifact.
 """
 
 from __future__ import annotations
@@ -27,6 +30,8 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+
+from gridregime.clean.validate import validate, print_report, has_failures
 
 # Resolve project root from this file's location: src/gridregime/pipeline/
 _HERE = Path(__file__).resolve()
@@ -132,12 +137,18 @@ def compute_coverage(df: pd.DataFrame, event: pd.Series) -> dict:
     }
 
 
-def run(skip_generation: bool = False, dry_run: bool = False) -> pd.DataFrame:
+def run(
+    skip_generation: bool = False,
+    dry_run: bool = False,
+    halt_on_fail: bool = False,
+) -> pd.DataFrame:
     """Execute the full Milestone 1A pipeline.
 
     Args:
         skip_generation: Skip fuel-type breakdown fetch (faster for testing).
         dry_run: Load events and print plan without hitting the API.
+        halt_on_fail: Abort (sys.exit 2) if any validation check FAILs,
+                      before writing any downstream artifacts.
 
     Returns:
         Coverage DataFrame (also written to results/tables/event_data_coverage.csv).
@@ -150,6 +161,7 @@ def run(skip_generation: bool = False, dry_run: bool = False) -> pd.DataFrame:
 
     coverage_rows = []
     all_windows: list[pd.DataFrame] = []
+    any_validation_failure = False
 
     for _, event in events.iterrows():
         print(f"\n{'='*60}")
@@ -172,10 +184,27 @@ def run(skip_generation: bool = False, dry_run: bool = False) -> pd.DataFrame:
             print(f"  ERROR fetching data: {exc}")
             continue
 
+        # ------------------------------------------------------------------
+        # Validate before writing anything
+        # ------------------------------------------------------------------
+        win_start = event["window_start"] - pd.Timedelta(hours=PRE_HOURS)
+        win_end = event["event_end"] + pd.Timedelta(hours=POST_HOURS)
+        checks = validate(df, event["event_id"], win_start, win_end)
+        print_report(checks, event["event_id"])
+
+        if has_failures(checks):
+            any_validation_failure = True
+            if halt_on_fail:
+                print(f"\n  HALTING: validation FAIL on {event['event_id']}. "
+                      f"No downstream artifacts written.")
+                sys.exit(2)
+            else:
+                print(f"  Continuing despite FAIL (use --halt-on-fail to stop here).")
+
         # Cache the raw hourly state table for this event
         interim_path = INTERIM_DIR / f"{event['event_id']}.parquet"
         df.to_parquet(interim_path, index=False)
-        print(f"  Saved hourly state table → {interim_path.relative_to(PROJECT_ROOT)}")
+        print(f"  Saved → {interim_path.relative_to(PROJECT_ROOT)}")
 
         # Annotate and collect window
         windowed = annotate_window(df, event)
@@ -197,13 +226,18 @@ def run(skip_generation: bool = False, dry_run: bool = False) -> pd.DataFrame:
     if not dry_run and not coverage_df.empty:
         cov_path = RESULTS_TABLES / "event_data_coverage.csv"
         coverage_df.to_csv(cov_path, index=False)
-        print(f"Coverage table → {cov_path.relative_to(PROJECT_ROOT)}")
+        print(f"\nCoverage table → {cov_path.relative_to(PROJECT_ROOT)}")
+        print(coverage_df.to_string(index=False))
 
         incomplete = coverage_df[coverage_df["missing_pct"] >= 5]
         if not incomplete.empty:
             print("\nWARNING: the following events have >5% missing core data:")
             print(incomplete[["event_id", "missing_pct"]].to_string(index=False))
             print("Resolve gaps before proceeding to feature engineering.")
+
+    if any_validation_failure:
+        print("\nWARNING: one or more validation FAILs occurred. "
+              "Inspect the output above before accepting these results.")
 
     return coverage_df
 
@@ -214,9 +248,15 @@ def main() -> None:
                         help="Skip fuel-type breakdown (faster for testing)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print plan without hitting the API")
+    parser.add_argument("--halt-on-fail", action="store_true",
+                        help="Abort on first validation FAIL before writing artifacts")
     args = parser.parse_args()
 
-    coverage = run(skip_generation=args.skip_generation, dry_run=args.dry_run)
+    coverage = run(
+        skip_generation=args.skip_generation,
+        dry_run=args.dry_run,
+        halt_on_fail=args.halt_on_fail,
+    )
     if not coverage.empty:
         incomplete = coverage[coverage["missing_pct"] >= 5]
         sys.exit(1 if not incomplete.empty else 0)
