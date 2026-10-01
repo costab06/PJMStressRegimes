@@ -16,27 +16,34 @@ action. This heterogeneity motivates treating grid stress as a multivariate
 system state rather than defining it through any individual operational
 threshold.
 
+Exploratory analysis further suggests that the magnitude of operational stress
+alone may be insufficient to distinguish emergency from successfully managed
+conditions. Some non-emergency periods exhibit more extreme individual load and
+forecast-error anomalies than emergency periods. This motivates testing whether
+the joint configuration, persistence, and trajectory of multiple operational
+variables contain information that is absent from their individual magnitudes.
+
 ## 3. Data and Methods
 
-### 2.1 Data Sources
+### 3.1 Data Sources
 
-### 2.2 Feature Engineering
+### 3.2 Feature Engineering
 
-### 2.3 Models
+### 3.3 Models
 
-## 3. Results
+## 4. Results
 
-### 3.1 Elliott Event Analysis
+### 4.1 Elliott Event Analysis
 
-### 3.2 Lead Time Analysis
+### 4.2 Lead Time Analysis
 
-### 3.3 False Alarm Rates
+### 4.3 False Alarm Rates
 
-### 3.4 Historical Retrospective
+### 4.4 Historical Retrospective
 
-## 4. Discussion
+## 5. Discussion
 
-## 5. Conclusion
+## 6. Conclusion
 
 ## References
 

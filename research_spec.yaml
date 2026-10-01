@@ -1,0 +1,155 @@
+# Grid Regime Study — Research Specification
+#
+# This file records methodological decisions in chronological order.
+# Entries are append-only. Do not revise past decisions in place; add
+# a new dated entry if a prior decision is superseded.
+#
+# The purpose is to provide methodologically defensible evidence that
+# features, populations, and hypotheses were fixed before training.
+
+---
+
+hypothesis:
+  version: 1
+  date: "2026-10-01"
+  statement: >
+    Risk of an RTO-wide capacity emergency is associated with the joint
+    configuration and evolution of system stress variables, not simply
+    their individual magnitudes.  Scalar extremeness alone is insufficient
+    to distinguish emergency from successfully-managed conditions.
+  motivation: >
+    Exploratory analysis (5 episodes, 2015–2026) showed that some non-emergency
+    periods (e.g. 2017–18 Cold Snap) exhibit more extreme individual LoadZ and
+    ForecastErrorZ values than emergency periods (e.g. Elliott Dec 2022), while
+    the emergency periods show distinctive velocity and persistence signatures
+    (e.g. monotonic FE increase, +7σ ramp rate in the 12h before action).
+    This finding is exploratory (post-hoc observation on a small sample) and
+    motivates the experiment but does not constitute a result.
+
+feature_freeze:
+  date: "2026-10-01"
+  status: FROZEN
+  rationale: >
+    The state vector below was fixed after the second exploratory pass
+    (z-scored figures + phase portrait, 5 independent episodes).
+    Any feature invented after this date must be assigned to
+    exploratory_v2 and may not be used in primary model evaluation.
+
+  state_vector:
+    generation: v1
+    variables:
+      - name: LoadZ
+        formula: "(D_t - mu_{h,m}) / sigma_{h,m}"
+        baseline: "2021 PJM hourly, conditioned on hour_of_day x month"
+      - name: ForecastErrorZ
+        formula: "(FE_t - mu_FE_{h,m}) / sigma_FE_{h,m}"
+        where: "FE_t = 100 * (D_t - D_hat_t) / D_hat_t"
+        baseline: "same as LoadZ"
+      - name: RampZ
+        formula: "(R3_t - mu_R3_{h,m}) / sigma_R3_{h,m}"
+        where: "R3_t = (D_t - D_{t-3}) / 3  [MW/h]"
+        baseline: "same as LoadZ"
+      - name: InterchangeZ
+        formula: "(I_t - mu_I_{h,m}) / sigma_I_{h,m}"
+        baseline: "same as LoadZ"
+
+  derived_from_frozen:
+    # These are mechanical derivatives of the frozen variables; they do
+    # not constitute new features for freeze purposes.
+    - name: velocity_k
+      formula: "X_t - X_{t-k}  for k in {1, 3, 6, 12, 24}"
+    - name: persistence_k
+      formula: "sum_{j=0}^{k} 1(X_{t-j} > threshold)  for k in {6, 12, 24}"
+    - name: joint_z_magnitude
+      formula: "||X_t||_2  (Euclidean norm of state vector)"
+
+  predefined_extensions:
+    # These were specified in the project design BEFORE the exploratory
+    # figures were produced. They are not post-hoc additions.
+    - name: WeatherZ
+      description: >
+        Temperature deviation from climatological normal, conditioned on
+        (hour, month, station). Requires NOAA integration (not yet acquired).
+      status: pending_data
+    - name: NeighborStressZ
+      description: >
+        Aggregate stress score for PJM-adjacent BAs, constructed from the
+        same LoadZ/FE/RampZ/InterchangeZ variables applied to neighboring
+        regions. Equal-weight aggregation initially; transmission-capacity
+        weighting deferred.
+      status: pending_data
+      note: >
+        Motivated by the 2018 Cold Snap interchange signature (InterchangeZ
+        persistently -3 to -4 sigma), but the "neighbor stress" feature was
+        in the design spec before that observation was made.
+
+unit_of_observation:
+  unit: episode
+  definition: >
+    An episode is a meteorologically and operationally coherent stress period.
+    Multiple operator actions within one weather event (e.g. Elliott Dec 23
+    and Dec 24) belong to the same episode.
+  rationale: >
+    Action-level rows within the same episode share a common meteorological
+    driver and overlapping data windows. Using individual action rows as
+    independent observations would inflate effective sample size and permit
+    training on Dec 23 Elliott to predict Dec 24 Elliott.
+  cross_validation: leave-one-episode-out (LOEO)
+
+target_populations:
+  date_defined: "2026-10-01"
+  coverage: "2015-07-01 to 2026-09-30"
+  ba: PJM
+  note: >
+    Populations defined before the exhaustive catalog search. Inclusion
+    criteria are predetermined; do not add criteria after reviewing the archive.
+
+  S3_emergency:
+    label: positive
+    description: >
+      RTO-wide capacity emergency: Maximum Generation Emergency Action,
+      Energy Emergency Alert level 2 or 3, or comparable action with
+      documented reserve shortfall or actual involuntary load reduction.
+    primary_discrimination_target: true
+
+  S2_stressed_managed:
+    label: hard_negative
+    description: >
+      EEA-1, pre-emergency demand response, capacity advisory, or weather
+      alert that did not escalate to S3. Conditions were anomalous and
+      required operator attention, but the system was successfully managed.
+    note: >
+      The S2->S3 discrimination boundary is expected to be harder and more
+      operationally meaningful than S1->S3. This population is the primary
+      hard-negative class.
+
+  S1_quantitative_extreme:
+    label: hard_negative
+    description: >
+      Periods with quantitatively extreme conditions (LoadZ, RampZ, weather)
+      but no documented significant operator intervention. Identified through
+      threshold exceedance on EIA-930 data alone, not through the PJM
+      advisory archive.
+    note: >
+      Secondary hard-negative class. Serves as a check on whether the model
+      is distinguishing genuine operational stress from mere load extremes.
+
+discrimination_targets:
+  primary:   "S2 vs S3  (stressed-managed vs. emergency)"
+  secondary: "S1 vs S3  (quantitative extreme vs. emergency)"
+  out_of_scope: "normal operations vs. S3  (too easy, not operationally useful)"
+
+model_plan:
+  status: DEFERRED pending exhaustive catalog
+  rationale: >
+    With 5 independent episodes the effective sample size is insufficient
+    for a meaningful regime model. HMM or other latent-state models will
+    not be evaluated until the episode count is substantially larger.
+  planned_approach:
+    - Hidden Markov Model on the frozen state vector
+    - Leave-one-episode-out cross-validation
+    - Phase portrait in data-derived (PCA) state space as primary
+      visualization of results
+  note: >
+    Do not begin model evaluation until the exhaustive catalog is complete
+    and the episode count per population is known.
