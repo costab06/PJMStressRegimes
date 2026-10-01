@@ -1,0 +1,6 @@
+event_id,timestamp,region,action_class,action_name,pjm_message_id,severity_rank
+E2026_HEAT_02,2026-07-02T11:30:00-04:00,PJM-RTO,pre_emergency_dr,Pre-Emergency Load Mgmt Reduction Action,105291,1
+E2026_HEAT_02,2026-07-02T15:45:00-04:00,PJM-RTO,pre_emergency_dr,Pre-Emergency Load Mgmt Reduction Action,105303,1
+E2026_HEAT_02,2026-07-02T16:45:00-04:00,PJM-RTO,pre_emergency_dr,Pre-Emergency Load Mgmt Reduction Action,105309,1
+E2026_HEAT_02,2026-07-02T17:18:00-04:00,MIDATL+SOUTHERN,max_generation,Maximum Generation Emergency Action,105314,2
+E2026_HEAT_02,2026-07-02T17:36:00-04:00,BGE+DOM+PEPCO,deploy_all_resources,Transmission Security Deploy All Resources Action,105321,3

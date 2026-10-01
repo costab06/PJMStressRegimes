@@ -1,3 +1,45 @@
+operator_actions:
+  description: >
+    One row per discrete operator action within an event. Joins to events.csv
+    on event_id. This table is the ground-truth action timeline used to
+    construct the central validation figure: P(Z_t = k) plotted above the
+    action escalation ladder to ask whether the inferred HMM state changed
+    before PJM began escalating.
+  event_id:
+    type: string
+    description: Foreign key to events.csv event_id.
+  timestamp:
+    type: datetime (ISO-8601 with UTC offset)
+    description: Time the action was issued, from PJM Alerts & Advisories.
+  region:
+    type: string
+    description: >
+      Geographic scope of the action. May be narrower than the parent event
+      region (e.g. BGE+DOM+PEPCO for a subregional transmission action).
+  action_class:
+    type: string (enum)
+    description: >
+      pre_emergency_dr: Demand-response activation prior to emergency
+                        declaration. Represents operator anticipation —
+                        earlier in the escalation ladder than max_generation.
+      max_generation: Maximum Generation Emergency Action. First point at
+                      which all available generation is called; this is T_i
+                      in events.csv for capacity_emergency events.
+      deploy_all_resources: Transmission security action; subregional scope.
+      eea1 / eea2 / eea3: Energy Emergency Alert levels 1-3.
+  action_name:
+    type: string
+    description: Verbatim action label from the PJM alert.
+  pjm_message_id:
+    type: integer
+    description: PJM Alerts & Advisories message ID. Primary lookup key.
+  severity_rank:
+    type: integer
+    description: >
+      Ordinal escalation rank within the event (1 = earliest / least severe,
+      higher = later / more severe). Used to order the action timeline axis
+      in the validation figure. Not comparable across events.
+
 events:
   event_id:
     type: string
