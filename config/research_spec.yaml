@@ -8,12 +8,17 @@ study:
 
   time_range:
     start: "2016-01-01"
-    end: "2023-12-31"
+    end: "2026-12-31"
 
-  target_event:
-    name: Elliott
-    period: ["2022-12-23 00:00", "2022-12-26 23:00"]
-    timezone: UTC
+  # Events are defined in metadata/events.csv.
+  # model_role=positive rows supply T_i (operator_action_time) for lead-time scoring.
+  # model_role=hard_negative rows are genuine stress periods with no operator action;
+  # they anchor false-positive control and must not be treated as easy negatives.
+  #
+  # first_alert_time is recorded for reference only — it is NOT used as T_i because
+  # PJM alerts can be issued >24 h ahead based on forecasts, which would cause the
+  # model to replicate PJM's forecast rather than detect impending operational stress.
+  event_catalog: metadata/events.csv
 
   historical_events:
     - name: 2003_blackout

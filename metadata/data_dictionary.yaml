@@ -1,3 +1,70 @@
+events:
+  event_id:
+    type: string
+    description: >
+      Unique event identifier. Prefix E = positive (operator action occurred),
+      C = negative control (stress present but no action). Suffix encodes year
+      and calendar day(s) where applicable.
+  event_name:
+    type: string
+    description: Human-readable event label.
+  region:
+    type: string
+    description: PJM subregion or multi-BA scope (e.g. PJM-RTO, MIDATL+SOUTHERN).
+  window_start:
+    type: datetime (ISO-8601 with UTC offset)
+    description: >
+      Start of the analysis window — typically when pre-event grid conditions
+      first become relevant. Used to define the feature extraction window, not
+      as a model label.
+  first_alert_time:
+    type: datetime (ISO-8601 with UTC offset), nullable
+    description: >
+      Timestamp of the first PJM advance advisory (e.g. Weather Alert, EEA1).
+      Nullable for events where no formal alert preceded the action. This is
+      NOT used as T_i — alerts may be issued >24 h in advance based on
+      forecasts, so using them as the prediction target would conflate our
+      model with PJM's own forecast.
+  operator_action_time:
+    type: datetime (ISO-8601 with UTC offset), nullable
+    description: >
+      Timestamp of the first operational action requiring immediate response
+      (e.g. Maximum Generation Emergency, EEA2/EEA3 declaration). This is T_i
+      in the lead-time formula L_i = T_i - T_i*, where T_i* is the model's
+      predicted time. Nullable for hard-negative controls where no action was
+      taken.
+  event_end:
+    type: datetime (ISO-8601 with UTC offset)
+    description: Timestamp when the event or monitoring window concluded.
+  severity:
+    type: string (enum)
+    description: >
+      S1 = routine stress / top-peak demand, no emergency.
+      S2 = capacity alert (EEA1 or equivalent) — advisory issued, no load shed.
+      S3 = capacity emergency (EEA2/3, Maximum Generation Emergency) —
+           immediate operator action required.
+  event_type:
+    type: string (enum)
+    description: >
+      capacity_emergency: S3 action taken.
+      capacity_alert: EEA1 or equivalent advisory without escalation.
+      extreme_cold: Sustained cold driving top-decile demand; no emergency.
+  model_role:
+    type: string (enum)
+    description: >
+      positive: Event with operator_action_time — a true target for the model.
+      hard_negative: Period of genuine grid stress that did NOT trigger an
+                     action. Critical for controlling false-positive rate;
+                     these are not easy negatives.
+  source_id:
+    type: string
+    description: >
+      PJM Alerts & Advisories numeric ID (integer) or internal archive key
+      (string). Lookup at PJM Alerts portal.
+  notes:
+    type: string
+    description: Free-text annotation on the event nature and data quality.
+
 grid_hourly:
   timestamp_utc:
     type: datetime
