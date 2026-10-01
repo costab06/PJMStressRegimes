@@ -30,6 +30,11 @@ import requests
 EIA_API_URL = "https://api.eia.gov/v2/electricity/rto/"
 RAW_PATH = Path("data/raw/eia930")
 
+# Earliest date for which the EIA v2 API has PJM (and most other BA) data.
+# Requests before this date return 0 rows without error.
+# Historical data pre-2019 requires the EIA bulk download files.
+EIA_V2_START = pd.Timestamp("2019-01-01", tz="UTC")
+
 # EIA type codes for region-data endpoint
 RegionType = Literal["D", "DF", "NG", "TI"]
 
@@ -192,14 +197,34 @@ def fetch_window(
     t0 = pd.Timestamp(start, tz="UTC")
     t1 = pd.Timestamp(end, tz="UTC")
 
-    # Determine which months are needed and which are already cached
-    months = pd.date_range(t0.floor("D"), t1.ceil("D"), freq="MS", tz="UTC")
-    if len(months) == 0:
-        months = pd.DatetimeIndex([t0.floor("MS")])
+    if t1 < EIA_V2_START:
+        raise ValueError(
+            f"Requested window {t0.date()} – {t1.date()} is entirely before "
+            f"EIA v2 API availability ({EIA_V2_START.date()}). "
+            f"Use EIA bulk historical files for pre-2019 data."
+        )
+    if t0 < EIA_V2_START:
+        print(f"  Warning: window starts before EIA v2 start ({EIA_V2_START.date()}); "
+              f"trimming to {EIA_V2_START.date()}.")
+        t0 = EIA_V2_START
+
+    # Build list of calendar months to fetch. pandas date_range with freq="MS"
+    # raises ValueError on tz-aware inputs in pandas 2.x, so we iterate manually.
+    # Start from the 1st of t0's month so we never miss the opening partial month.
+    months: list[pd.Timestamp] = []
+    cur = t0.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    while cur <= t1:
+        months.append(cur)
+        next_month = cur.month % 12 + 1
+        next_year = cur.year + (1 if cur.month == 12 else 0)
+        cur = cur.replace(year=next_year, month=next_month)
 
     month_dfs: list[pd.DataFrame] = []
     for month_start in months:
-        month_end = month_start + pd.offsets.MonthEnd(1) + pd.Timedelta(hours=23)
+        # Last hour of the month: advance to next month, back one hour
+        next_m = month_start.month % 12 + 1
+        next_y = month_start.year + (1 if month_start.month == 12 else 0)
+        month_end = month_start.replace(year=next_y, month=next_m) - pd.Timedelta(hours=1)
         cache_path = cache_dir / f"{ba}_{month_start.strftime('%Y-%m')}.parquet"
         if cache_path.exists():
             month_dfs.append(pd.read_parquet(cache_path))
@@ -231,6 +256,9 @@ def fetch_window(
                 print(f"  Warning: {ba} fuel-type {month_start.date()} failed: {exc}")
 
         merged = merged.sort_values("timestamp_utc").reset_index(drop=True)
+        if merged.empty:
+            print(f"  Warning: API returned 0 rows for {ba} {month_start.strftime('%Y-%m')} — not caching.")
+            continue
         merged.to_parquet(cache_path, index=False)
         month_dfs.append(merged)
 

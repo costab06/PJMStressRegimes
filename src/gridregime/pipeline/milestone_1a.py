@@ -134,6 +134,7 @@ def compute_coverage(df: pd.DataFrame, event: pd.Series) -> dict:
         "interchange_hours": interchange_h,
         "weather_hours": weather_h,
         "missing_pct": missing_pct,
+        "notes": "",
     }
 
 
@@ -180,6 +181,23 @@ def run(
 
         try:
             df = fetch_event_data(event, skip_generation=skip_generation)
+        except ValueError as exc:
+            # Pre-2019 data not available via EIA v2 API
+            print(f"  SKIP: {exc}")
+            coverage_rows.append({
+                "event_id": event["event_id"],
+                "window_start": (event["window_start"] - pd.Timedelta(hours=PRE_HOURS)).isoformat(),
+                "window_end": (event["event_end"] + pd.Timedelta(hours=POST_HOURS)).isoformat(),
+                "expected_hours": None,
+                "demand_hours": 0,
+                "forecast_hours": 0,
+                "generation_hours": 0,
+                "interchange_hours": 0,
+                "weather_hours": 0,
+                "missing_pct": None,
+                "notes": str(exc),
+            })
+            continue
         except Exception as exc:
             print(f"  ERROR fetching data: {exc}")
             continue

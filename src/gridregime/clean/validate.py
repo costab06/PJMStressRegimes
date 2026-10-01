@@ -76,6 +76,27 @@ def validate(
     results: list[CheckResult] = []
 
     # ------------------------------------------------------------------
+    # 0. Ensure timestamp_utc is datetime — all subsequent checks depend on it
+    # ------------------------------------------------------------------
+    raw_ts = df["timestamp_utc"]
+    if not pd.api.types.is_datetime64_any_dtype(raw_ts):
+        # Try to coerce; if it fails, report and skip remaining checks
+        try:
+            df = df.copy()
+            df["timestamp_utc"] = pd.to_datetime(raw_ts, utc=True)
+            results.append(CheckResult(
+                "ts_parse", False, "WARN",
+                f"timestamp_utc dtype was {raw_ts.dtype}; coerced to datetime. "
+                f"Check that ingest applies pd.to_datetime(..., utc=True) before returning."
+            ))
+        except Exception as exc:
+            results.append(CheckResult(
+                "ts_parse", False, "FAIL",
+                f"Cannot parse timestamp_utc as datetime (dtype={raw_ts.dtype}): {exc}"
+            ))
+            return results
+
+    # ------------------------------------------------------------------
     # 1. Timezone check — must be UTC-aware, not naive or wrong zone
     # ------------------------------------------------------------------
     ts = df["timestamp_utc"]
@@ -100,9 +121,10 @@ def validate(
     # ------------------------------------------------------------------
     sorted_ts = ts.sort_values().reset_index(drop=True)
     is_monotone = (ts.reset_index(drop=True) == sorted_ts).all()
+    n_ooo = int((ts.reset_index(drop=True) != sorted_ts).sum())
     results.append(CheckResult(
         "monotone", bool(is_monotone), "WARN" if not is_monotone else "INFO",
-        "OK" if is_monotone else f"{(ts != sorted_ts).sum()} out-of-order rows"
+        "OK" if is_monotone else f"{n_ooo} out-of-order rows"
     ))
 
     # ------------------------------------------------------------------
@@ -117,25 +139,28 @@ def validate(
     ))
 
     # ------------------------------------------------------------------
-    # 4. DST artifact — no 23h or 25h days
+    # 4. DST artifact — no 23h or 25h days (interior days only)
     # ------------------------------------------------------------------
-    daily = ts.sort_values().dt.floor("D").value_counts()
-    bad_days = daily[(daily != 24) & (daily > 0)]
-    if bad_days.empty:
-        results.append(CheckResult("no_dst", True, "INFO", "all days have exactly 24 hours"))
+    ts_sorted = ts.sort_values()
+    daily = ts_sorted.dt.floor("D").value_counts()
+    # The first and last calendar days of the window are naturally truncated
+    # when the fetch window doesn't start/end on a midnight boundary. Exclude
+    # them; only interior days must have exactly 24 rows.
+    first_day = ts_sorted.iloc[0].floor("D")
+    last_day = ts_sorted.iloc[-1].floor("D")
+    interior = daily[(daily.index != first_day) & (daily.index != last_day)]
+    bad_interior = interior[interior != 24]
+    if bad_interior.empty:
+        n_edge = int((daily != 24).sum())
+        edge_note = f" ({n_edge} edge-truncated day(s) excluded)" if n_edge else ""
+        results.append(CheckResult("no_dst", True, "INFO",
+                                   f"all interior days have exactly 24 hours{edge_note}"))
     else:
-        # Single-row windows at the boundary are expected; flag only if
-        # a full-day boundary is wrong
-        full_bad = bad_days[bad_days.between(20, 28)]  # exclude tiny edge slices
-        if full_bad.empty:
-            results.append(CheckResult("no_dst", True, "INFO",
-                                       f"edge-day truncation only (OK): {dict(bad_days)}"))
-        else:
-            results.append(CheckResult(
-                "no_dst", False, "FAIL",
-                f"Days with ≠24 rows: {dict(full_bad)}. "
-                f"This is the signature of local-time timestamps mishandled as UTC."
-            ))
+        results.append(CheckResult(
+            "no_dst", False, "FAIL",
+            f"Interior days with ≠24 rows: {dict(bad_interior)}. "
+            f"This is the signature of local-time timestamps mishandled as UTC."
+        ))
 
     # ------------------------------------------------------------------
     # 5. Gaps in demand series (most reliable completeness indicator)
@@ -184,43 +209,55 @@ def validate(
     # ------------------------------------------------------------------
     if "demand_mwh" in df.columns:
         d = df["demand_mwh"].dropna()
-        n_neg = int((d < 0).sum())
-        n_low = int((d < DEMAND_MIN_MW).sum())
-        n_high = int((d > DEMAND_MAX_MW).sum())
-        if n_neg:
+        if d.empty:
             results.append(CheckResult(
                 "demand_pos", False, "FAIL",
-                f"{n_neg} negative demand values — likely sentinel or unit error."
-            ))
-        elif n_low or n_high:
-            results.append(CheckResult(
-                "demand_pos", False, "WARN",
-                f"{n_low} values below {DEMAND_MIN_MW:,} MW, "
-                f"{n_high} above {DEMAND_MAX_MW:,} MW. "
-                f"Check for unit mismatch (GW vs MW) or bad data."
+                "demand_mwh column is entirely NaN — API returned no demand data."
             ))
         else:
-            results.append(CheckResult(
-                "demand_pos", True, "INFO",
-                f"range [{int(d.min()):,}, {int(d.max()):,}] MW — plausible"
-            ))
+            n_neg = int((d < 0).sum())
+            n_low = int((d < DEMAND_MIN_MW).sum())
+            n_high = int((d > DEMAND_MAX_MW).sum())
+            if n_neg:
+                results.append(CheckResult(
+                    "demand_pos", False, "FAIL",
+                    f"{n_neg} negative demand values — likely sentinel or unit error."
+                ))
+            elif n_low or n_high:
+                results.append(CheckResult(
+                    "demand_pos", False, "WARN",
+                    f"{n_low} values below {DEMAND_MIN_MW:,} MW, "
+                    f"{n_high} above {DEMAND_MAX_MW:,} MW. "
+                    f"Check for unit mismatch (GW vs MW) or bad data."
+                ))
+            else:
+                results.append(CheckResult(
+                    "demand_pos", True, "INFO",
+                    f"range [{int(d.min()):,}, {int(d.max()):,}] MW — plausible"
+                ))
 
     # ------------------------------------------------------------------
     # 8. Interchange bounds
     # ------------------------------------------------------------------
     if "interchange_mwh" in df.columns:
         ic = df["interchange_mwh"].dropna()
-        n_out = int(((ic < INTERCHANGE_MIN_MW) | (ic > INTERCHANGE_MAX_MW)).sum())
-        if n_out:
+        if ic.empty:
             results.append(CheckResult(
-                "interchange", False, "WARN",
-                f"{n_out} interchange values outside [{INTERCHANGE_MIN_MW:,}, {INTERCHANGE_MAX_MW:,}] MW."
+                "interchange", False, "FAIL",
+                "interchange_mwh column is entirely NaN — API returned no interchange data."
             ))
         else:
-            results.append(CheckResult(
-                "interchange", True, "INFO",
-                f"range [{int(ic.min()):,}, {int(ic.max()):,}] MW — plausible"
-            ))
+            n_out = int(((ic < INTERCHANGE_MIN_MW) | (ic > INTERCHANGE_MAX_MW)).sum())
+            if n_out:
+                results.append(CheckResult(
+                    "interchange", False, "WARN",
+                    f"{n_out} interchange values outside [{INTERCHANGE_MIN_MW:,}, {INTERCHANGE_MAX_MW:,}] MW."
+                ))
+            else:
+                results.append(CheckResult(
+                    "interchange", True, "INFO",
+                    f"range [{int(ic.min()):,}, {int(ic.max()):,}] MW — plausible"
+                ))
 
     # ------------------------------------------------------------------
     # 9. Forecast availability era check
