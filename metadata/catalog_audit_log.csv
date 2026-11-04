@@ -1,0 +1,34 @@
+reviewed_date,source,pjm_msg_id,posting_date_utc,action_description,region_scope,classification_considered,decision,episode_id,exclusion_reason
+2026-10-01,events.csv seed,103785,2022-12-23T22:30:00Z,Maximum Generation Emergency Action,RTO,S3,INCLUDE,ELL_2022,
+2026-10-01,events.csv seed,103801,2022-12-24T09:25:00Z,Maximum Generation Emergency Action,RTO,S3,INCLUDE,ELL_2022,
+2026-10-01,events.csv seed,103959,2023-07-27T01:28:00Z,Energy Emergency Alert Level 1,RTO,S2,INCLUDE,HEAT_2023,
+2026-10-01,events.csv seed,103964,2023-07-28T04:00:00Z,Energy Emergency Alert Level 1 (canceled 17:00),RTO,S2,INCLUDE,HEAT_2023,
+2026-10-01,events.csv seed,104642,2023-06-22T16:00:00Z,Energy Emergency Alert Level 1,RTO,S2,INCLUDE,HEAT_2025,
+2026-10-01,events.csv seed,104648,2023-06-23T15:30:00Z,Energy Emergency Alert Level 1,RTO,S2,INCLUDE,HEAT_2025,
+2026-10-01,events.csv seed,104667,2023-06-24T15:30:00Z,Energy Emergency Alert Level 1,RTO,S2,INCLUDE,HEAT_2025,
+2026-10-01,events.csv seed,105314,2026-07-02T21:18:00Z,Maximum Generation Emergency Action,RTO,S3,INCLUDE,HEAT_2026,
+2026-10-01,EIA-930 bulk threshold,PJM_2018_COLD,2018-01-06T00:00:00Z,Top-10 winter peak; LoadZ sustained >4-sigma; no PAI,RTO,S1,INCLUDE,COLD_2018,
+2026-10-01,PJM archive search,103538,2022-06-14T00:00:00Z,Deploy All Resources Action,AEP zone only,S3,EXCLUDE,,Subregional (AEP zone) transmission action; no RTO-wide capacity emergency declared
+2026-10-01,PJM archive search,104058,2023-11-02T00:00:00Z,Energy Emergency Alert — DRILL,RTO,S3,EXCLUDE,,Explicitly labeled DRILL in posting; not a real emergency
+2026-10-01,DOE OEOE archive,DOE_STRUCT_2025-05-30,2025-05-30T00:00:00Z,DOE 202(c) order — structural retirement deferral,RTO,S3,EXCLUDE,,Order defers generator retirements pending capacity procurement; not a real-time operational emergency
+2026-10-01,PJM archive + DOE archive,DOE_202_19_PJM,2019-01-29T11:00:00Z,Energy Emergency Alert Level 1 + Maximum Generation Alert; DOE 202(c) issued,RTO,S2,INCLUDE,POLAR_2019,
+2026-10-01,PJM archive + DOE archive,DOE_202_19_PJM,2019-01-30T07:00:00Z,Energy Emergency Alert Level 1 continuation; conservative operations,RTO,S2,INCLUDE,POLAR_2019,
+2026-10-01,PJM archive search,PJM_HEAT_2024_D1,2024-06-22T20:00:00Z,Maximum Generation Alert (precautionary; EEA-1 equivalent),RTO,S2,INCLUDE,HEAT_2024,
+2026-10-01,PJM archive search,PJM_HEAT_2024_D2,2024-06-23T19:00:00Z,Maximum Generation Alert Day 2; 160526 MW RTO peak Jun 24,RTO,S2,INCLUDE,HEAT_2024,
+2026-10-01,PJM archive search,PJM_HEAT_2024_D3,2024-06-24T19:00:00Z,Maximum Generation Alert Day 3; tail of heat event,RTO,S2,INCLUDE,HEAT_2024,
+2026-10-01,PJM archive search,104470,2025-01-21T13:00:00Z,Energy Emergency Alert Level 1; high load forecast and increased exports,RTO,S2,INCLUDE,COLD_2025,
+2026-10-01,PJM archive search,104470,2025-01-22T11:00:00Z,Energy Emergency Alert Level 1 continuation,RTO,S2,INCLUDE,COLD_2025,
+2026-10-01,PJM archive search,PJM_HEAT_2025_JUL,2025-07-29T16:00:00Z,Maximum Generation Alert + Load Management Alert (EEA-1),RTO,S2,INCLUDE,HEAT_2025_JUL,
+2026-10-01,PJM archive search,PJM_HEAT_2025_JUL,2025-07-30T15:00:00Z,Maximum Generation Alert Day 2; tail of heat event,RTO,S2,INCLUDE,HEAT_2025_JUL,
+2026-10-01,DOE OEOE archive,DOE_202-26-02,2026-01-25T00:00:00Z,DOE 202(c) order — Winter Storm Fern; PJM EEA-1,RTO,S2,INCLUDE,COLD_2026,
+2026-10-01,DOE OEOE archive,DOE_202-26-06,2026-01-27T00:00:00Z,DOE 202(c) continuation — Winter Storm Fern,RTO,S2,INCLUDE,COLD_2026,
+2026-10-01,DOE OEOE archive,DOE_202-26-32,2026-06-30T00:00:00Z,DOE 202(c) order — July 2026 heat wave pre-emergency; linked to Jul 2 Max Gen Emergency Action,RTO,S3,INCLUDE,HEAT_2026,
+2026-10-01,DOE OEOE archive,DOE_202-26-33,2026-06-30T00:00:00Z,DOE 202(c) order — July 2026 heat wave (companion order),RTO,S3,INCLUDE,HEAT_2026,
+2026-10-01,DOE OEOE archive,DOE_202-26-41,2026-09-01T18:00:00Z,DOE 202(c) order — September 2026 heat; PJM Max Gen Alert Sep 1-2; did not escalate to EEA-3,RTO,S2,INCLUDE,HEAT_2026_SEP,
+2026-10-01,DOE OEOE archive,DOE_202-26-41,2026-09-02T18:00:00Z,Maximum Generation Alert Day 2 — September 2026 heat; no escalation to EEA-3,RTO,S2,INCLUDE,HEAT_2026_SEP,
+2026-10-01,DOE OEOE archive,DOE_202-26-35,2026-07-14T00:00:00Z,DOE 202(c) order — possible separate July 2026 heat episode; distinct from Jul 2 emergency,RTO,S3,PENDING,,Insufficient information to classify as episode separate from HEAT_2026 or as new S3/S2; requires direct PJM archive review of Jul 14 actions
+2026-10-01,PJM archive search + NERC reports,FEB_2021_URI,2021-02-09T00:00:00Z,Winter Storm Uri — PJM conservative operations and emergency actions; extent of RTO-wide declarations unclear,RTO,S2,PENDING,,PJM was stressed during Uri (primarily ERCOT/SPP catastrophic failure); needs direct archive review to determine if RTO-wide EEA declarations were issued and at what level
+2026-10-01,PJM archive canvass,CANVASS_2015_2017,2015-07-01T00:00:00Z,Archive canvass 2015-07-01 to 2017-12-31: no qualifying RTO-wide emergency declarations found,RTO,S3,EXCLUDE,,No Maximum Generation Emergency Action or EEA-2/3 declarations found in this period via PJM archive search and NERC event reports; no S2 EEA-1 events of comparable severity to catalog found
+2026-10-01,PJM archive canvass,CANVASS_2018_SUMMER,2018-06-01T00:00:00Z,Archive canvass summer 2018: no qualifying RTO-wide EEA declarations found,RTO,S2,EXCLUDE,,No EEA-1 or higher emergency declarations at RTO scope found for summer 2018 via archive search
+2026-10-01,PJM archive canvass,CANVASS_2019_2021,2019-06-01T00:00:00Z,Archive canvass summer 2019 / 2020 / summer 2021: no qualifying RTO-wide emergencies found (COVID demand suppression in 2020; western heat dome 2021 did not affect PJM at emergency level),RTO,S2,EXCLUDE,,Demand suppressed 2020; 2019 and 2021 summers below emergency threshold at PJM RTO level
+2026-10-01,PJM archive canvass,CANVASS_2022_SUMMER,2022-06-01T00:00:00Z,Archive canvass summer 2022: no qualifying RTO-wide EEA-2/3 or Max Gen Emergency Action found; posting 103538 (Jun 14) excluded as subregional,RTO,S3,EXCLUDE,,No RTO-wide capacity emergency in summer 2022; subregional AEP action already recorded as EXCLUDE

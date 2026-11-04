@@ -139,6 +139,37 @@ discrimination_targets:
   secondary: "S1 vs S3  (quantitative extreme vs. emergency)"
   out_of_scope: "normal operations vs. S3  (too easy, not operationally useful)"
 
+catalog_protocol:
+  date: "2026-10-01"
+  source: "PJM Alerts & Advisories archive; EIA-930 threshold exceedance for S1"
+  coverage: "2015-07-01 to 2026-09-30"
+
+  episode_consolidation: >
+    Episode IDs must be assigned during cataloging, not afterward. Multiple
+    alerts or actions caused by the same continuous grid/weather condition
+    share one episode_id. Individual actions remain rows in
+    operator_actions.csv. Consolidation decisions must be recorded in the
+    audit log with explicit rationale.
+
+  exclusion_recording: >
+    Every reviewed archive item must be recorded in catalog_audit_log.csv,
+    whether included or excluded. Exclusion rows must carry: posting date,
+    PJM message ID or description, classification considered, and exclusion
+    reason. This provides an auditable denominator and protects against
+    accusations of cherry-picking.
+
+  classification_independence: >
+    Archive classification is performed without reference to Figures 5-9
+    (z-scored survey and phase portrait). Those figures were used to derive
+    the hypotheses; they must not influence which episodes enter the sample.
+    The frozen population criteria in target_populations are the only
+    permissible classification guide.
+
+  output_files:
+    - metadata/catalog_audit_log.csv   # every item reviewed, included or excluded
+    - metadata/events.csv              # included episodes only, updated in place
+    - metadata/operator_actions.csv    # per-action rows for included episodes
+
 model_plan:
   status: DEFERRED pending exhaustive catalog
   rationale: >
@@ -150,6 +181,28 @@ model_plan:
     - Leave-one-episode-out cross-validation
     - Phase portrait in data-derived (PCA) state space as primary
       visualization of results
-  note: >
-    Do not begin model evaluation until the exhaustive catalog is complete
-    and the episode count per population is known.
+
+  modeling_gate:
+    note: >
+      The episode counts below are a gate on statistical design choice,
+      not a success criterion. If the exhaustive search produces fewer
+      episodes than these thresholds, the paper adapts its statistical
+      design (e.g. transition/event-history or case-control methods)
+      rather than loosening population definitions to reach the numbers.
+      A small S3 count is a finding about the rarity of the phenomenon,
+      not a cataloging failure.
+    S3_min: 6
+    S2_min: 10
+    total_min: 20
+    current_S3: 2   # ELL_2022, HEAT_2026
+    current_S2: 8   # POLAR_2019, HEAT_2023, HEAT_2024, COLD_2025, HEAT_2025, HEAT_2025_JUL, COLD_2026, HEAT_2026_SEP
+    current_S1: 1   # COLD_2018
+    current_total: 11
+    pending_review: 2   # FEB_2021_URI (Winter Storm Uri PJM actions), HEAT_2026_JUL14 (DOE 202-26-35)
+    catalog_status: >
+      Exhaustive pass complete 2026-10-01. Two items remain PENDING direct
+      archive review; they could add 0-2 further episodes. No additional
+      canvassing of the 2015-2026 window is planned. Source IDs prefixed
+      PJM_HEAT_* are placeholders where exact PJM message IDs were not
+      recovered during web-based audit; values must be resolved against
+      the live PJM archive before final publication.

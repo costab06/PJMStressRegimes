@@ -37,10 +37,8 @@ TABLES_DIR    = PROJECT_ROOT / "results" / "tables"
 T_MIN = -72
 T_MAX = +12
 
-_COLORS = [
-    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
-]
+import matplotlib.cm as _cm
+_COLORS = [_cm.tab20(i / 20) for i in range(20)]
 _LINE_KW  = dict(linewidth=1.3, alpha=0.85)
 # Phase portrait markers at these t values
 _PHASE_MARKS = [-24, -12, -6, -3, -1, 0]
