@@ -4,6 +4,8 @@ Run from the project root:
     python3 paper/build_docx.py
 """
 
+from pathlib import Path
+
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -13,6 +15,7 @@ from docx.oxml import OxmlElement
 import copy
 
 OUTPUT = "paper/article.docx"
+FIGURES_DIR = Path("results/figures")
 
 
 def add_horizontal_rule(doc):
@@ -44,6 +47,19 @@ def callout(doc, text):
     run.italic = True
     run.font.color.rgb = RGBColor(0x44, 0x44, 0x88)
     return p
+
+
+def figure(doc, filename, cap_text, width=Inches(5.8)):
+    """Embed a figure from the results/figures directory with a caption."""
+    path = FIGURES_DIR / filename
+    if path.exists():
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run()
+        run.add_picture(str(path), width=width)
+    else:
+        body(doc, f"[Figure not found: {filename}]")
+    caption(doc, cap_text)
 
 
 def caption(doc, text):
@@ -605,6 +621,31 @@ def build():
         "and validated. All current episodes achieve 100% coverage."
     )
 
+    body(doc,
+        "Figures 1–4 show the raw (non-normalized) time series for all 11 episodes, "
+        "aligned on t=0. These are the input to Stage 3; the normalization step "
+        "converts each of these into the corresponding z-scored variable."
+    )
+
+    figure(doc, "fig1_demand_norm.png",
+        "Fig. 1 — Normalized demand (MW) aligned on t=0 for all 11 episodes. "
+        "Each line is one event window; the vertical dashed line marks t=0 "
+        "(operator action or peak demand hour).")
+
+    figure(doc, "fig2_forecast_error.png",
+        "Fig. 2 — Raw forecast error (demand minus day-ahead forecast, MW) "
+        "for all 11 episodes.")
+
+    figure(doc, "fig3_ramp_3h.png",
+        "Fig. 3 — 3-hour ramp rate (MW/h) for all 11 episodes. The extraordinary "
+        "ramp in ELL_2022 (Winter Storm Elliott) is visible even in the "
+        "unnormalized series.")
+
+    figure(doc, "fig4_interchange_rel.png",
+        "Fig. 4 — Net interchange (MW, positive = PJM importing) for all 11 "
+        "episodes. The divergence between summer and winter behavior reflects "
+        "structural differences in neighboring-region capacity availability.")
+
     # ═══════════════════════════════════════════════════════════════════════════
     # SECTION 6 — EXPLORATORY FINDINGS
     # ═══════════════════════════════════════════════════════════════════════════
@@ -648,6 +689,25 @@ def build():
         "in the four-dimensional state space has the possibility of capturing both."
     )
 
+    figure(doc, "fig5_load_z.png",
+        "Fig. 5 — LoadZ: seasonally normalized demand z-score for all 11 episodes. "
+        "Values above +2σ indicate demand well above the seasonal norm for that "
+        "hour and month. ELL_2022 and the winter cold episodes reach the highest values.")
+
+    figure(doc, "fig6_fe_z.png",
+        "Fig. 6 — ForecastErrorZ: z-scored forecast error. Positive values mean "
+        "demand exceeded the day-ahead forecast. ELL_2022 shows a sustained climb "
+        "to +6–7σ; HEAT_2026 runs negative in the final hours before t=0.")
+
+    figure(doc, "fig7_ramp3_z.png",
+        "Fig. 7 — RampZ: z-scored 3-hour ramp rate. ELL_2022 reaches +7σ — the "
+        "most extreme value in the catalog — while all S2 controls remain below +4σ.")
+
+    figure(doc, "fig8_ic_z.png",
+        "Fig. 8 — InterchangeZ: z-scored net interchange. Positive = PJM importing; "
+        "negative = exporting. The winter/summer split is clearly visible: winter "
+        "episodes tend toward importing, summer toward exporting.")
+
     heading(doc, "The Phase Portrait", 2)
 
     body(doc,
@@ -680,6 +740,13 @@ def build():
         "The phase portrait is a visualization tool, not a result. It shows what "
         "the data looks like; it does not show that the model works."
     )
+
+    figure(doc, "fig9_phase_portrait.png",
+        "Fig. 9 — Phase portrait in (ForecastErrorZ, InterchangeZ) space, t=−24h "
+        "to t=0. Each trajectory is one event window; ★ marks t=0. The two S3 "
+        "episodes (ELL_2022 and HEAT_2026) occupy different quadrants, confirming "
+        "that no single two-dimensional projection cleanly separates all S3 from "
+        "all S2 events.")
 
     # ── New subsections added after full-catalog analysis ─────────────────────
 
@@ -723,6 +790,31 @@ def build():
         "account for the fact that the two known emergencies look quite different "
         "from each other — and both need to be detected."
     )
+
+    figure(doc, "fig10_bic.png",
+        "Fig. 10 — BIC curve for Gaussian HMM models with K=3, 4, 5 states. "
+        "BIC decreases monotonically; K=5 was selected as the minimum achieving "
+        "stable improvement.")
+
+    figure(doc, "fig11_state_means.png",
+        "Fig. 11 — HMM state mean vectors (heatmap). Each row is a latent state; "
+        "columns are the four z-scored features. States organize primarily by "
+        "season and weather type rather than operational outcome.")
+
+    figure(doc, "fig12_state_occupancy.png",
+        "Fig. 12 — Episode occupancy in each HMM state during t∈[−24, 0]. "
+        "ELL_2022 is the only episode to spend substantial time in the "
+        "net-importer state (State 4); no S2 episode reaches it.")
+
+    figure(doc, "fig13_phase_states.png",
+        "Fig. 13 — Phase portrait colored by HMM state. The state labels map "
+        "onto the same (ForecastErrorZ, InterchangeZ) space as Fig. 9, "
+        "revealing how the latent states partition the trajectory space.")
+
+    figure(doc, "fig14_state_timelines.png",
+        "Fig. 14 — State timeline strips: Viterbi-decoded state sequence for "
+        "each episode across the full 84-hour window. The strips show when "
+        "each episode enters and exits each latent state.")
 
     heading(doc, "Case-Control Matched Comparison", 2)
 
@@ -816,6 +908,40 @@ def build():
         "in the final hours; the summer emergency by the conjunction of extreme "
         "load and extreme export pressure. The joint configuration is the signal."
     )
+
+    figure(doc, "fig15_episode_scatter.png",
+        "Fig. 15 — Episode-level feature scatter matrix, t∈[−12, 0]. Each point "
+        "is one episode; ★ = S3 emergency, ● = hard negative. No single pair of "
+        "features cleanly separates both S3 events from all controls.")
+
+    figure(doc, "fig16_feature_bars.png",
+        "Fig. 16 — Per-feature summary bars for all episodes, sorted by role. "
+        "Red bars = S3 emergencies; blue = hard negatives. ELL_2022's "
+        "Max RampZ (+7.0σ) is visually distinct; HEAT_2026 is not distinguished "
+        "by any single feature.")
+
+    figure(doc, "fig17_cc_winter.png",
+        "Fig. 17 — Winter case-control comparison: ELL_2022 (red) against the "
+        "control envelope (blue shading = min/max range; blue line = mean) for "
+        "four cold-season controls. The RampZ panel shows ELL_2022 breaking "
+        "above the control envelope in the final 6 hours before t=0.")
+
+    figure(doc, "fig18_cc_summer.png",
+        "Fig. 18 — Summer case-control comparison: HEAT_2026 (red) against the "
+        "control envelope for five summer controls. No single panel shows "
+        "unambiguous separation; the discrimination requires the joint "
+        "configuration of LoadZ and InterchangeZ.")
+
+    figure(doc, "fig19_cc_phase.png",
+        "Fig. 19 — Case-control phase portraits in (ForecastErrorZ, InterchangeZ) "
+        "space: winter group (left) and summer group (right). The S3 trajectory "
+        "is shown in red against the control envelope.")
+
+    figure(doc, "fig20_cc_divergence.png",
+        "Fig. 20 — Divergence plot: S3 episode minus control mean for each "
+        "feature, t∈[−24, 0]. Positive values indicate the S3 episode is above "
+        "the control mean at that hour. ELL_2022's RampZ divergence accelerates "
+        "sharply in the final 6 hours.")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SECTION 7 — THE MODELING APPROACH
@@ -965,7 +1091,123 @@ def build():
     )
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SECTION 10 — CURRENT STATUS AND NEXT STEPS
+    # SECTION 10 — THE RUNTIME MONITORING LOOP
+    # ═══════════════════════════════════════════════════════════════════════════
+    heading(doc, "The Runtime Monitoring Loop", 1)
+
+    body(doc,
+        "The research pipeline described above is a retrospective analysis — "
+        "it characterizes historical episodes after the fact. The ultimate "
+        "purpose of the work, however, is prospective: a system that runs "
+        "continuously and declares the current condition of the PJM grid in "
+        "near-real-time. The infrastructure already built maps directly onto "
+        "this operational mode."
+    )
+
+    body(doc,
+        "Every hour, the monitoring loop would execute four steps:"
+    )
+
+    loop_steps = [
+        ("Fetch.",
+         "Pull the latest EIA-930 hourly observation for PJM from the API. "
+         "The public EIA-930 feed typically lags real-time by approximately "
+         "one hour, so declarations are made on the state of the system as "
+         "of T−1h. Connecting to PJM's native real-time data feed (PJM Data "
+         "Miner 2) would reduce this lag to minutes."),
+        ("Normalize.",
+         "Apply the frozen seasonal z-score baseline — the same (hour-of-day "
+         "× month) lookup table used throughout the retrospective analysis — "
+         "to convert raw demand, forecast error, ramp rate, and interchange "
+         "into the standardized state vector (LoadZ, ForecastErrorZ, RampZ, "
+         "InterchangeZ)."),
+        ("Window.",
+         "Append the new observation to a rolling 84-hour buffer and recompute "
+         "the trajectory. The buffer is the same structure as the aligned "
+         "episode windows used in the retrospective analysis, now updated "
+         "in real time."),
+        ("Score.",
+         "Run the current state vector through the regime model and emit a "
+         "condition declaration."),
+    ]
+    for title, detail in loop_steps:
+        p = doc.add_paragraph()
+        p.add_run(title + " ").bold = True
+        p.add_run(detail)
+
+    body(doc,
+        "The condition declaration uses a four-level taxonomy:"
+    )
+
+    # Condition table
+    doc.add_paragraph()
+    cond_table = doc.add_table(rows=5, cols=2)
+    cond_table.style = "Table Grid"
+    cond_hdr = cond_table.rows[0]
+    for i, txt in enumerate(["Condition", "Meaning"]):
+        c = cond_hdr.cells[i]
+        c.text = txt
+        c.paragraphs[0].runs[0].bold = True
+        c.paragraphs[0].runs[0].font.size = Pt(9)
+
+    cond_data = [
+        ("NOMINAL",
+         "All indicators within normal range; no regime signal present."),
+        ("ELEVATED",
+         "One or more indicators approaching threshold; trajectory warrants "
+         "monitoring."),
+        ("STRESS",
+         "Joint configuration resembles pre-emergency signatures identified "
+         "in the case-control analysis; recommend heightened operator "
+         "attention."),
+        ("EMERGENCY",
+         "Operator action already in progress; EEA or equivalent declaration "
+         "confirmed."),
+    ]
+    for i, (cond, meaning) in enumerate(cond_data, 1):
+        cond_table.rows[i].cells[0].text = cond
+        cond_table.rows[i].cells[0].paragraphs[0].runs[0].bold = True
+        cond_table.rows[i].cells[0].paragraphs[0].runs[0].font.size = Pt(9)
+        cond_table.rows[i].cells[1].text = meaning
+        cond_table.rows[i].cells[1].paragraphs[0].runs[0].font.size = Pt(9)
+
+    doc.add_paragraph()
+    caption(doc,
+        "Table 5. Runtime condition declarations. The STRESS level is the "
+        "operationally significant output — it represents the system's "
+        "assessment that current conditions resemble the approach to a "
+        "historical emergency."
+    )
+
+    body(doc,
+        "The scoring logic has two planned stages. In the near term, while "
+        "the catalog contains only two S3 positives, the scorer uses rules "
+        "derived directly from the case-control analysis: for example, "
+        "RampZ > 4σ AND InterchangeZ > 0 in a winter context elevates the "
+        "condition; LoadZ > 3σ AND InterchangeZ < −3σ simultaneously in "
+        "summer does the same. These thresholds are transparent, auditable, "
+        "and grounded in observed historical behavior."
+    )
+
+    body(doc,
+        "In the longer term, as the S3 catalog grows — either from future "
+        "PJM events or from extending the analysis to other RTOs — the "
+        "rule-based scorer is replaced by the probabilistic HMM approach: "
+        "a model that emits a continuous probability that the current "
+        "trajectory belongs to a pre-emergency regime. The transition from "
+        "rules to model is a drop-in replacement; the fetch-normalize-window "
+        "infrastructure is unchanged."
+    )
+
+    callout(doc,
+        "The ingest pipeline, seasonal baseline, and z-score normalization "
+        "already built are not just analysis tools — they are the production "
+        "infrastructure for the runtime monitor. The retrospective study "
+        "and the operational system share the same code."
+    )
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SECTION 11 — CURRENT STATUS AND NEXT STEPS
     # ═══════════════════════════════════════════════════════════════════════════
     heading(doc, "Current Status and Next Steps", 1)
 
