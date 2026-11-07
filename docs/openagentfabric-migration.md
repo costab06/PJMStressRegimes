@@ -1,78 +1,40 @@
-# OpenAgentFabric migration — phase 1
+# OpenAgentFabric migration — operational development
 
-Status: isolated implementation branch; no scientific methodology changes.
+Status: **main is the active development branch**. The original implementation is preserved at `legacy/pre-oaf`. CI runs the OAF adapter tests with Redis and the existing scientific suite.
 
-## Research invariants
+## Long-term objective
 
-- `research_spec.yaml` remains the append-only methodological authority.
-- Preserve frozen feature definitions, episode classifications, baseline, and evaluation gates.
-- Scientific functions remain independently executable without Redis or OpenAgentFabric.
-- Agent wrappers orchestrate existing implementations rather than reimplement calculations.
-- Record episode ID, research specification hash, input hashes, and code revision for every run.
-- Never silently substitute missing source data, relabel an episode, or treat retries as new independent observations.
+A continuously running PJM grid-risk intelligence platform, with OAF handling durable agent execution, acquisition agents gathering EIA/PJM/weather data, replaceable statistical or machine-learning models, and an evidence-backed intelligence and alert layer. SECAgents-style intelligence may be integrated later; no predictive model or live alerting is claimed yet.
 
-## Proposed boundaries
+## Scientific invariants
 
-1. EIA-930 acquisition — source retrieval, validation, raw artifact and provenance.
-2. NOAA acquisition — weather observations with station and timestamp provenance.
-3. PJM operational evidence — actions, notices, and episode references.
-4. Feature computation — invoke existing frozen feature calculations.
-5. Regime analysis and evaluation — invoke research routines with episode-level validation.
-6. Coordinator — correlate episode workflows and assemble versioned artifacts.
+- `research_spec.yaml` is the methodological authority; do not rewrite the frozen v1 feature definitions or episode classifications.
+- Frozen v1 is LoadZ, ForecastErrorZ, RampZ, InterchangeZ, using the 2021 PJM hour-by-month baseline.
+- Keep scientific calculations independently runnable without OAF or Redis.
+- Distinguish S3 operational emergencies from actual customer interruptions; these are not identical prediction targets.
+- Prevent lookahead: feature inputs must contain only observations available at prediction time. Source timestamps alone do not prove publication-time availability; future work must capture release/ingestion timestamps and revisions.
+- Preserve hashes, source versions, baseline versions, episode IDs and model versions. No silent filling of missing inputs or double counting retried events.
+- Historical event-relative features (which use an eventual event t=0) must never be used as if t=0 were known in live inference.
 
-These boundaries are provisional until actual source modules and framework interfaces are inventoried.
+## Implemented
 
-## Phase 1 scope
+1. `oaf/eia930_agent.py`: OAF BaseAgent wrapper around existing EIA-930 acquisition, coverage checks, content-addressed artifacts, durable completion event.
+2. `oaf/compare_historical.py`: API or offline monthly-cache ingestion comparison, source hashes and evidence reports; real historical source parity remains to be demonstrated.
+3. `oaf/feature_agent.py`: point-in-time feature adapter wrapping `features.seasonal.apply_zscore`. Requires a four-hour contiguous window ending at as_of, rejects future rows, duplicate timestamps, missing data and non-finite output, and publishes a hashed feature artifact. This is a feature calculation, **not a disruption-risk prediction**.
+4. Unit tests, Redis integration tests, and main-branch CI.
 
-Add a dependency-free provenance helper and unit tests. This is preparation for agent adapters, not yet OpenAgentFabric runtime integration.
+## Next implementation milestones
 
-## Next gate
+1. Verify numerical parity on archived real PJM windows with a frozen baseline. Record source availability timestamps, including data revisions, for defensible replay.
+2. Implement durable acquisition coordination: recurring windows, per-source freshness thresholds, correlation, gap detection, retry/recovery and evidence.
+3. Implement PJM operating-notice acquisition as the second agent; NOAA and adjacent-BA acquisition follow.
+4. Introduce versioned model interfaces for training and point-in-time inference. Start with transparent stress indicators; calibrate predictive probabilities only with sufficient independent outcomes and temporal validation.
+5. Add an intelligence/alert layer that distinguishes missing data from normal risk, provides evidence and uncertainty, and audits alert decisions.
 
-Inspect the exact OpenAgentFabric agent interfaces, message schema, and lifecycle before writing an adapter. Identify the existing EIA-930 entrypoint; compare its original outputs with the wrapped path using identical inputs.
+## Validation gates
 
-## Acceptance criteria
-
-- Existing research tests pass with Python 3.12.
-- Same inputs, specification, episode, and code revision produce the same fingerprint.
-- Changed input or specification changes the fingerprint.
-- Duplicate delivery does not publish duplicate artifacts.
-- Crash recovery is observable and reproducible.
-- The migration does not alter the research model or scientific results.
-
-
-## Phase 2: EIA-930 adapter (implementation branch)
-
-The source tree was inspected on 2026-11-07:
-
-- OAF: `framework/shared/agent/base.py`, `framework/shared/eventbus/events.py`,
-  `framework/shared/correlation/registry.py`, `framework/shared/eventbus/base.py`.
-- PJM: `src/gridregime/ingest/eia930.py`, `src/gridregime/ingest/eia930_bulk.py`,
-  `tests/test_ingest.py`.
-
-The adapter at `src/gridregime/oaf/eia930_agent.py` subclasses
-`shared.agent.base.BaseAgent` and consumes `grid.eia930.requested` events.
-It delegates acquisition to the existing `fetch_window`, validates the required
-demand/forecast/interchange series, and writes a content-addressed CSV artifact.
-It emits `grid.eia930.fetched` with the original correlation ID and request
-event as causation ID. BaseAgent is responsible for transport-level retries,
-lease/heartbeat, terminal commit, and dead-letter handling.
-
-**Important:** The existing EIA fetcher may continue after some API errors.
-The adapter rejects missing/null required columns, but does not yet verify
-complete expected hourly coverage or source-specific quality flags. This must
-be added before claiming production-quality ingestion.
-
-**Runtime:** PJM's pyproject supports Python 3.10+, while OAF requires Python
-3.12+. Run this integration on Python 3.12+ with both packages importable.
-The adapter is not imported by the scientific core.
-
-**Validation pending:** Tests are committed but have not been run against a
-real OAF installation or Redis. To run from a checkout with OAF alongside PJM:
-
-```bash
-python -m pip install -e '.[dev]'
-python -m pip install -e ../OpenAgentFabric
-PYTHONPATH=../OpenAgentFabric/framework pytest -q tests/test_provenance.py tests/test_oaf_eia930.py
-```
-
-Do not merge this draft PR until these tests and existing PJM tests pass.
+- Existing research suite stays green; scientific output is not silently changed.
+- OAF retries/recovery/idempotence tested with Redis.
+- Same inputs and baseline yield identical feature artifacts; modified inputs or baseline change fingerprints.
+- No future observations, missing hourly coverage or invalid baseline cells accepted.
+- No production forecasting, alerting, or real-data parity claims until those capabilities are tested.
