@@ -21,12 +21,12 @@ A continuously running PJM grid-risk intelligence platform, with OAF handling du
 1. `oaf/eia930_agent.py`: OAF BaseAgent wrapper around existing EIA-930 acquisition, coverage checks, content-addressed artifacts, durable completion event.
 2. `oaf/compare_historical.py`: API or offline monthly-cache ingestion comparison, source hashes and evidence reports; real historical source parity remains to be demonstrated.
 3. `oaf/feature_agent.py`: point-in-time feature adapter wrapping `features.seasonal.apply_zscore`. Requires a four-hour contiguous window ending at as_of, rejects future rows, duplicate timestamps, missing data and non-finite output, and publishes a hashed feature artifact. This is a feature calculation, **not a disruption-risk prediction**.
-4. Unit tests, Redis integration tests, and main-branch CI.
+4. `oaf/acquisition_coordinator.py`: OAF BaseAgent handling `grid.acquisition.cycle.requested`; validates an explicit UTC decision hour, computes an inclusive EIA window using configurable lookback and publication-lag assumptions, and emits `grid.eia930.requested` plus `grid.acquisition.cycle.dispatched` atomically under OAF. This is dispatch only, not an autonomous scheduler, a completed ingestion cycle, or verified data freshness.\n5. Unit tests, Redis integration tests, and main-branch CI.
 
 ## Next implementation milestones
 
 1. Verify numerical parity on archived real PJM windows with a frozen baseline. Record source availability timestamps, including data revisions, for defensible replay.
-2. Implement durable acquisition coordination: recurring windows, per-source freshness thresholds, correlation, gap detection, retry/recovery and evidence.
+2. Complete acquisition orchestration: add an external recurring scheduler, durable cycle identity, per-source freshness checks, completion aggregation, gap detection and evidence. The current coordinator only dispatches one explicit cycle.
 3. Implement PJM operating-notice acquisition as the second agent; NOAA and adjacent-BA acquisition follow.
 4. Introduce versioned model interfaces for training and point-in-time inference. Start with transparent stress indicators; calibrate predictive probabilities only with sufficient independent outcomes and temporal validation.
 5. Add an intelligence/alert layer that distinguishes missing data from normal risk, provides evidence and uncertainty, and audits alert decisions.
