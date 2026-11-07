@@ -10,7 +10,6 @@ import hashlib
 import os
 from pathlib import Path
 from typing import Callable
-from uuid import UUID
 
 import pandas as pd
 from shared.agent.base import BaseAgent
@@ -51,6 +50,23 @@ def persist_eia_window(
     timestamps = pd.to_datetime(frame["timestamp_utc"], utc=True, errors="raise")
     if timestamps.duplicated().any():
         raise ValueError("EIA-930 result contains duplicate UTC timestamps")
+    # The EIA fetcher can warn and continue after an upstream series failure.
+    # Do not mistake a partially retrieved hourly window for a complete one.
+    t0 = pd.Timestamp(start)
+    t1 = pd.Timestamp(end)
+    t0 = t0.tz_localize("UTC") if t0.tzinfo is None else t0.tz_convert("UTC")
+    t1 = t1.tz_localize("UTC") if t1.tzinfo is None else t1.tz_convert("UTC")
+    if t1 < t0 or t0 != t0.floor("h") or t1 != t1.floor("h"):
+        raise ValueError("EIA-930 requires an ordered, whole-hour UTC window")
+    expected = pd.date_range(t0, t1, freq="h")
+    actual = pd.DatetimeIndex(timestamps).sort_values()
+    if not actual.equals(expected):
+        missing_hours = expected.difference(actual)
+        unexpected_hours = actual.difference(expected)
+        raise ValueError(
+            "EIA-930 hourly coverage mismatch: "
+            f"{len(missing_hours)} missing, {len(unexpected_hours)} unexpected hours"
+        )
     frame = frame.assign(timestamp_utc=timestamps).sort_values("timestamp_utc")
     data = frame.to_csv(index=False, lineterminator="\n").encode("utf-8")
     digest = hashlib.sha256(data).hexdigest()
