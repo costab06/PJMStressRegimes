@@ -83,3 +83,45 @@ async def test_oaf_envelope_preserves_correlation_and_causation(tmp_path):
     assert output[0].correlation_id == request.correlation_id
     assert output[0].causation_id == request.event_id
     assert output[0].payload["row_count"] == 2
+
+
+def test_missing_hour_rejected(tmp_path):
+    def fetcher(ba, start, end):
+        return sample_frame().iloc[[0]].copy()
+    with pytest.raises(ValueError, match="hourly coverage mismatch"):
+        persist_eia_window(
+            ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
+            output_dir=tmp_path, fetcher=fetcher,
+        )
+
+
+def test_extra_hour_rejected(tmp_path):
+    def fetcher(ba, start, end):
+        frame = sample_frame()
+        extra = frame.iloc[[1]].copy()
+        extra["timestamp_utc"] = pd.Timestamp("2022-12-20T02:00Z")
+        return pd.concat([frame, extra], ignore_index=True)
+    with pytest.raises(ValueError, match="hourly coverage mismatch"):
+        persist_eia_window(
+            ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
+            output_dir=tmp_path, fetcher=fetcher,
+        )
+
+
+def test_duplicate_hour_rejected(tmp_path):
+    def fetcher(ba, start, end):
+        frame = sample_frame()
+        return pd.concat([frame, frame.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match="duplicate UTC timestamps"):
+        persist_eia_window(
+            ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
+            output_dir=tmp_path, fetcher=fetcher,
+        )
+
+
+def test_invalid_window_rejected(tmp_path):
+    with pytest.raises(ValueError, match="ordered, whole-hour"):
+        persist_eia_window(
+            ba="PJM", start="2022-12-20T02", end="2022-12-20T01",
+            output_dir=tmp_path, fetcher=lambda *args: sample_frame(),
+        )
