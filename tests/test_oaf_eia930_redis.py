@@ -149,3 +149,64 @@ async def test_failed_ingestion_retries_then_dead_letters(tmp_path):
         )
         await agent.correlation_registry.delete(record.correlation_id)
         await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_abandoned_delivery_reclaimed_by_replacement_worker(tmp_path):
+    """An unprocessed pending delivery can be recovered by another worker."""
+    url = os.environ.get("OAF_TEST_REDIS_URL")
+    if not url:
+        pytest.skip("Set OAF_TEST_REDIS_URL for Redis integration")
+    bus = RedisEventBus(url)
+    await bus.redis.ping()
+    suffix = uuid4().hex
+    stream = f"test.grid.recovery.{suffix}"
+    calls = []
+    def fetcher(ba, start, end):
+        calls.append((ba, start, end))
+        return pd.DataFrame({
+            "timestamp_utc": pd.to_datetime(["2022-12-20T00:00Z", "2022-12-20T01:00Z"]),
+            "ba": ["PJM", "PJM"], "demand_mwh": [100.0, 101.0],
+            "forecast_mwh": [99.0, 100.0], "interchange_mwh": [-2.0, -3.0],
+        })
+    registry = CorrelationRegistry(bus.redis)
+    agent = EIA930AcquisitionAgent(
+        output_dir=tmp_path, event_bus=bus, correlation_registry=registry,
+        stream=stream, consumer=f"replacement-{suffix}", fetcher=fetcher,
+    )
+    record = await registry.create(
+        "grid.eia930.recovery", datetime.now(timezone.utc), {"episode_id": suffix},
+    )
+    source = EventEnvelope(
+        event_type=REQUESTED, source_agent="grid-coordinator",
+        correlation_id=record.correlation_id,
+        payload={"ba": "PJM", "start": "2022-12-20T00", "end": "2022-12-20T01"},
+    )
+    try:
+        await bus.publish(stream, source)
+        original_id = None
+        async for original_id, _ in bus.subscribe(
+            stream, agent.group, f"abandoned-{suffix}", count=1, block_ms=1000
+        ):
+            break
+        assert original_id is not None
+        # Simulate a worker crash after delivery but before processing.
+        _, recovered = await bus.reclaim_pending_batch(
+            stream, agent.group, agent.consumer, min_idle_ms=0,
+        )
+        assert len(recovered) == 1
+        message_id, event = recovered[0]
+        assert message_id == original_id
+        await agent.process_message(message_id, event)
+        assert await bus.get_terminal_state(stream, agent.group, source.event_id) == "committed"
+        assert len(calls) == 1
+        assert len(await bus.redis.xrange(stream)) == 2
+        assert len(list(tmp_path.glob("eia930-*.csv"))) == 1
+    finally:
+        await bus.redis.delete(
+            stream,
+            f"oaf:terminal:{stream}:{agent.group}:{source.event_id}",
+            agent.step_registry.key(source.correlation_id, str(agent.name), str(source.event_id)),
+        )
+        await registry.delete(record.correlation_id)
+        await bus.close()
