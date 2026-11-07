@@ -38,3 +38,41 @@ Inspect the exact OpenAgentFabric agent interfaces, message schema, and lifecycl
 - Duplicate delivery does not publish duplicate artifacts.
 - Crash recovery is observable and reproducible.
 - The migration does not alter the research model or scientific results.
+
+
+## Phase 2: EIA-930 adapter (implementation branch)
+
+The source tree was inspected on 2026-11-07:
+
+- OAF: `framework/shared/agent/base.py`, `framework/shared/eventbus/events.py`,
+  `framework/shared/correlation/registry.py`, `framework/shared/eventbus/base.py`.
+- PJM: `src/gridregime/ingest/eia930.py`, `src/gridregime/ingest/eia930_bulk.py`,
+  `tests/test_ingest.py`.
+
+The adapter at `src/gridregime/oaf/eia930_agent.py` subclasses
+`shared.agent.base.BaseAgent` and consumes `grid.eia930.requested` events.
+It delegates acquisition to the existing `fetch_window`, validates the required
+demand/forecast/interchange series, and writes a content-addressed CSV artifact.
+It emits `grid.eia930.fetched` with the original correlation ID and request
+event as causation ID. BaseAgent is responsible for transport-level retries,
+lease/heartbeat, terminal commit, and dead-letter handling.
+
+**Important:** The existing EIA fetcher may continue after some API errors.
+The adapter rejects missing/null required columns, but does not yet verify
+complete expected hourly coverage or source-specific quality flags. This must
+be added before claiming production-quality ingestion.
+
+**Runtime:** PJM's pyproject supports Python 3.10+, while OAF requires Python
+3.12+. Run this integration on Python 3.12+ with both packages importable.
+The adapter is not imported by the scientific core.
+
+**Validation pending:** Tests are committed but have not been run against a
+real OAF installation or Redis. To run from a checkout with OAF alongside PJM:
+
+```bash
+python -m pip install -e '.[dev]'
+python -m pip install -e ../OpenAgentFabric
+PYTHONPATH=../OpenAgentFabric/framework pytest -q tests/test_provenance.py tests/test_oaf_eia930.py
+```
+
+Do not merge this draft PR until these tests and existing PJM tests pass.
