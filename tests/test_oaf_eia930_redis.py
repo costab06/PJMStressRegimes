@@ -13,7 +13,7 @@ pytest.importorskip("shared.agent.base")
 from shared.correlation.registry import CorrelationRegistry
 from shared.eventbus.events import EventEnvelope
 from shared.eventbus.redis import RedisEventBus
-from shared.workflow.registry import StepRegistry
+from shared.workflow.registry import StepRegistry, StepCommit
 
 from gridregime.oaf.eia930_agent import EIA930AcquisitionAgent, FETCHED, REQUESTED
 
@@ -75,7 +75,7 @@ async def test_eia930_redis_round_trip_and_replay(tmp_path):
         # A repeated terminal commit must not publish another completion.
         assert not await bus.commit(
             stream, agent.group, message_id, source.event_id, [],
-            consumer=agent.consumer, step_commit=None,
+            consumer=agent.consumer, step_commit=StepCommit(\n                source.correlation_id, str(agent.name), str(source.event_id),\n                "already-committed", "already-committed", {"event_id": str(source.event_id)},\n            ),
         )
         assert len(await bus.redis.xrange(stream)) == 2
     finally:
