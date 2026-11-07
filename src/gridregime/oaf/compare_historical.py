@@ -23,8 +23,11 @@ from gridregime.oaf.eia930_agent import persist_eia_window
 
 def compare_window(ba: str, start: str, end: str, output_dir: Path) -> dict:
     original = fetch_window(ba, start, end)
+    # Compare against the same immutable in-memory source snapshot. Two
+    # independent API calls can differ if EIA revises data between requests.
     result = persist_eia_window(
         ba=ba, start=start, end=end, output_dir=output_dir,
+        fetcher=lambda _ba, _start, _end: original.copy(),
     )
     artifact = Path(result["artifact_path"])
     stored = pd.read_csv(artifact, parse_dates=["timestamp_utc"])
