@@ -2,9 +2,9 @@ name: OAF adapter validation
 
 on:
   push:
-    branches: [feature/oaf-migration-phase1]
+    branches: [main, feature/oaf-migration-phase1]
   pull_request:
-    branches: [master]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
