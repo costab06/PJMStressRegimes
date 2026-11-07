@@ -44,3 +44,31 @@ def test_historical_comparison_rejects_incomplete_source(monkeypatch, tmp_path):
         compare_historical.compare_window(
             "PJM", "2022-12-20T00", "2022-12-20T01", tmp_path
         )
+
+
+def test_offline_historical_cache_comparison(monkeypatch, tmp_path):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    source = cache / "PJM_2022-12.parquet"
+    sample().to_parquet(source, index=False)
+    def no_api(*args, **kwargs):
+        raise AssertionError("Offline comparison must not access EIA API")
+    monkeypatch.setattr(compare_historical, "fetch_window", no_api)
+    result = compare_historical.compare_window(
+        "PJM", "2022-12-20T00", "2022-12-20T01",
+        tmp_path / "out", cache_dir=cache, offline=True,
+    )
+    import hashlib
+    import json
+    assert result["rows"] == 2
+    assert result["source_parquet_sha256"][source.name] == hashlib.sha256(source.read_bytes()).hexdigest()
+    evidence = tmp_path / "out" / f"comparison-{result['sha256']}.json"
+    assert json.loads(evidence.read_text()) == result
+
+
+def test_offline_comparison_requires_complete_month_cache(tmp_path):
+    with pytest.raises(FileNotFoundError, match="Missing cached"):
+        compare_historical.compare_window(
+            "PJM", "2022-12-20T00", "2022-12-20T01",
+            tmp_path / "out", cache_dir=tmp_path, offline=True,
+        )
