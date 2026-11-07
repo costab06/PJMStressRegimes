@@ -87,3 +87,65 @@ async def test_eia930_redis_round_trip_and_replay(tmp_path):
         )
         await registry.delete(record.correlation_id)
         await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_ingestion_retries_then_dead_letters(tmp_path):
+    """A permanently incomplete source must not publish a success event."""
+    url = os.environ.get("OAF_TEST_REDIS_URL")
+    if not url:
+        pytest.skip("Set OAF_TEST_REDIS_URL for Redis integration")
+    bus = RedisEventBus(url)
+    await bus.redis.ping()
+    suffix = uuid4().hex
+    stream = f"test.grid.failure.{suffix}"
+    dlq = f"test.grid.failure.dlq.{suffix}"
+    agent = EIA930AcquisitionAgent(
+        output_dir=tmp_path,
+        event_bus=bus,
+        correlation_registry=CorrelationRegistry(bus.redis),
+        stream=stream,
+        consumer=f"worker-{suffix}",
+        dlq_stream=dlq,
+        max_attempts=2,
+        fetcher=lambda ba, start, end: pd.DataFrame({
+            "timestamp_utc": ["2022-12-20T00:00Z"],
+            "ba": ["PJM"],
+            "demand_mwh": [100.0],
+            "forecast_mwh": [99.0],
+            # interchange_mwh intentionally absent
+        }),
+    )
+    record = await agent.correlation_registry.create(
+        "grid.eia930.failure", datetime.now(timezone.utc), {"episode_id": suffix},
+    )
+    source = EventEnvelope(
+        event_type=REQUESTED, source_agent="grid-coordinator",
+        correlation_id=record.correlation_id,
+        payload={"ba": "PJM", "start": "2022-12-20T00", "end": "2022-12-20T01"},
+    )
+    message_id = None
+    try:
+        await bus.publish(stream, source)
+        async for message_id, _ in bus.subscribe(
+            stream, agent.group, agent.consumer, count=1, block_ms=1000
+        ):
+            break
+        assert message_id is not None
+        await agent.process_message(message_id, source)
+        assert await bus.get_terminal_state(stream, agent.group, source.event_id) is None
+        assert len(await bus.redis.xrange(stream)) == 1
+        await agent.process_message(message_id, source)
+        assert await bus.get_terminal_state(stream, agent.group, source.event_id) == "dead_lettered"
+        assert len(await bus.redis.xrange(stream)) == 1
+        assert len(await bus.redis.xrange(dlq)) == 1
+        assert not list(tmp_path.glob("eia930-*.csv"))
+    finally:
+        await bus.redis.delete(
+            stream, dlq,
+            f"oaf:terminal:{stream}:{agent.group}:{source.event_id}",
+            bus._attempt_key(stream, agent.group, message_id) if message_id else f"unused:{suffix}",
+            agent.step_registry.key(source.correlation_id, str(agent.name), str(source.event_id)),
+        )
+        await agent.correlation_registry.delete(record.correlation_id)
+        await bus.close()
