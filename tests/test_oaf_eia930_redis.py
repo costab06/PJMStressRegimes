@@ -66,7 +66,7 @@ async def test_eia930_redis_round_trip_and_replay(tmp_path):
         assert await bus.get_terminal_state(stream, agent.group, source.event_id) == "committed"
         events = await bus.redis.xrange(stream)
         assert len(events) == 2
-        completed = EventEnvelope.model_validate_json(events[1][1][b"event"])
+        completed = EventEnvelope.model_validate_json(events[1][1].get("event", events[1][1].get(b"event")))
         assert completed.event_type == FETCHED
         assert completed.correlation_id == source.correlation_id
         assert completed.causation_id == source.event_id
