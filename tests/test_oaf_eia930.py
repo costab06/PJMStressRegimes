@@ -125,3 +125,32 @@ def test_invalid_window_rejected(tmp_path):
             ba="PJM", start="2022-12-20T02", end="2022-12-20T01",
             output_dir=tmp_path, fetcher=lambda *args: sample_frame(),
         )
+
+
+def test_artifact_preserves_standalone_fetch_values(tmp_path):
+    """The wrapper must not alter the underlying scientific data values."""
+    original = sample_frame()
+    def fetcher(ba, start, end):
+        return original.copy()
+    result = persist_eia_window(
+        ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
+        output_dir=tmp_path, fetcher=fetcher,
+    )
+    stored = pd.read_csv(result["artifact_path"])
+    for column in ("demand_mwh", "forecast_mwh", "interchange_mwh"):
+        assert stored[column].tolist() == original[column].tolist()
+    assert pd.to_datetime(stored["timestamp_utc"], utc=True).tolist() == (
+        original["timestamp_utc"].tolist()
+    )
+
+
+def test_unexpected_balancing_authority_rejected(tmp_path):
+    def fetcher(ba, start, end):
+        frame = sample_frame()
+        frame.loc[0, "ba"] = "MISO"
+        return frame
+    with pytest.raises(ValueError, match="unexpected balancing authority"):
+        persist_eia_window(
+            ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
+            output_dir=tmp_path, fetcher=fetcher,
+        )
