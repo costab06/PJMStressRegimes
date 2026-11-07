@@ -5,17 +5,10 @@ import pandas as pd
 
 
 def test_load_cached_eia930_missing(tmp_path):
-    """load_cached raises FileNotFoundError for non-existent file."""
-    import importlib, sys
-    # patch RAW_PATH to tmp_path
+    """load_cached_month raises FileNotFoundError for non-existent file."""
     import gridregime.ingest.eia930 as m
-    orig = m.RAW_PATH
-    m.RAW_PATH = tmp_path
-    try:
-        with pytest.raises(FileNotFoundError):
-            m.load_cached("PJM", 2022)
-    finally:
-        m.RAW_PATH = orig
+    with pytest.raises(FileNotFoundError):
+        m.load_cached_month("PJM", 2022, 1, cache_dir=tmp_path)
 
 
 def test_load_historical_empty(tmp_path):
