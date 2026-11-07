@@ -75,7 +75,7 @@ async def test_eia930_redis_round_trip_and_replay(tmp_path):
         # A repeated terminal commit must not publish another completion.
         assert not await bus.commit(
             stream, agent.group, message_id, source.event_id, [],
-            consumer=agent.consumer,
+            consumer=agent.consumer, step_commit=None,
         )
         assert len(await bus.redis.xrange(stream)) == 2
     finally:
