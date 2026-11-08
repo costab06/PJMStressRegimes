@@ -38,7 +38,7 @@ return {1, event_id}
 async def submit_cycle(
     *, redis, correlation_registry: CorrelationRegistry,
     ba: str, as_of: str, lookback_hours: int = 24,
-    publication_lag_hours: int = 2, stream: str = "oaf.events",
+    publication_lag_hours: int = 2, require_pjm: bool = False,\n    stream: str = "oaf.events",
 ) -> dict:
     """Submit once per exact cycle configuration; returns whether newly queued.
 
@@ -50,7 +50,7 @@ async def submit_cycle(
         publication_lag_hours=publication_lag_hours,
     )
     instant = datetime.fromisoformat(plan["as_of"])
-    fields = {k: plan[k] for k in ("ba", "lookback_hours", "publication_lag_hours")}
+    fields = {k: plan[k] for k in ("ba", "lookback_hours", "publication_lag_hours", "require_pjm")}
     correlation = await correlation_registry.create(
         trigger_type=CYCLE_REQUESTED,
         trigger_timestamp=instant,
@@ -63,7 +63,7 @@ async def submit_cycle(
         correlation_id=correlation.correlation_id,
         payload={"ba": plan["ba"], "as_of": plan["as_of"],
                  "lookback_hours": lookback_hours,
-                 "publication_lag_hours": publication_lag_hours},
+                 "publication_lag_hours": publication_lag_hours,\n                 "require_pjm": require_pjm},
     )
     key = f"grid:cycle:published:{correlation.correlation_id}"
     result = await redis.eval(
