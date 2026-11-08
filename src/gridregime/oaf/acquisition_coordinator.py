@@ -16,7 +16,8 @@ from shared.eventbus.events import EventEnvelope
 
 CYCLE_REQUESTED = "grid.acquisition.cycle.requested"
 CYCLE_DISPATCHED = "grid.acquisition.cycle.dispatched"
-EIA_REQUESTED = "grid.eia930.requested"\nPJM_LIVE_REQUESTED = "grid.pjm.live.requested"
+EIA_REQUESTED = "grid.eia930.requested"
+PJM_LIVE_REQUESTED = "grid.pjm.live.requested"
 
 
 def plan_acquisition_cycle(
@@ -28,7 +29,9 @@ def plan_acquisition_cycle(
     The lag is a configurable operational assumption, NOT evidence of actual
     EIA publication freshness. Data completeness is checked by the EIA agent.
     """
-    if not isinstance(require_pjm, bool):\n        raise ValueError("require_pjm must be boolean")\n    if not isinstance(ba, str) or not ba.strip():
+    if not isinstance(require_pjm, bool):
+        raise ValueError("require_pjm must be boolean")
+    if not isinstance(ba, str) or not ba.strip():
         raise ValueError("A balancing authority is required")
     if not isinstance(lookback_hours, int) or isinstance(lookback_hours, bool) or not 4 <= lookback_hours <= 168:
         raise ValueError("lookback_hours must be an integer in [4, 168]")
@@ -46,7 +49,8 @@ def plan_acquisition_cycle(
         "end": end.strftime("%Y-%m-%dT%H"),
         "lookback_hours": lookback_hours,
         "publication_lag_hours": publication_lag_hours,
-        "freshness_status": "unverified-pending-acquisition",\n        "require_pjm": require_pjm,
+        "freshness_status": "unverified-pending-acquisition",
+        "require_pjm": require_pjm,
     }
 
 
