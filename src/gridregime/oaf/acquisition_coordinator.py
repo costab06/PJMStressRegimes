@@ -77,11 +77,23 @@ class AcquisitionCoordinatorAgent(BaseAgent):
         common = dict(source_agent=str(self.name),
                       correlation_id=event.correlation_id,
                       causation_id=event.event_id)
-        return [
+        events = [
             EventEnvelope(
                 event_type=EIA_REQUESTED,
                 payload={key: plan[key] for key in ("ba", "start", "end")},
                 **common,
             ),
-            EventEnvelope(event_type=CYCLE_DISPATCHED, payload=plan, **common),
         ]
+        if plan["require_pjm"]:
+            events.append(EventEnvelope(
+                event_type=PJM_LIVE_REQUESTED,
+                payload={
+                    "start": plan["start"] + ":00:00+00:00",
+                    "end": plan["end"] + ":00:00+00:00",
+                },
+                **common,
+            ))
+        events.append(EventEnvelope(
+            event_type=CYCLE_DISPATCHED, payload=plan, **common,
+        ))
+        return events
