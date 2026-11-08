@@ -15,7 +15,8 @@ from shared.eventbus.events import EventEnvelope
 
 DISPATCHED = "grid.acquisition.cycle.dispatched"
 EIA_ASSESSED = "grid.acquisition.quality.assessed"
-PJM_FETCHED = "grid.pjm.procedures.fetched"\nPJM_LIVE_FETCHED = "grid.pjm.live.fetched"
+PJM_FETCHED = "grid.pjm.procedures.fetched"
+PJM_LIVE_FETCHED = "grid.pjm.live.fetched"
 STATUS_CHANGED = "grid.acquisition.cycle.status"
 
 
@@ -70,7 +71,8 @@ class AcquisitionCycleStatusAgent(BaseAgent):
         field = {
             DISPATCHED: "dispatch",
             EIA_ASSESSED: "eia",
-            PJM_FETCHED: "pjm",\n            PJM_LIVE_FETCHED: "pjm",
+            PJM_FETCHED: "pjm",
+            PJM_LIVE_FETCHED: "pjm",
         }.get(event.event_type)
         if field is None:
             raise ValueError("Unsupported evidence event")
