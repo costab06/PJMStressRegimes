@@ -64,3 +64,22 @@ async def test_live_agent_event_lineage(tmp_path):
     assert result[0].event_type == FETCHED
     assert result[0].correlation_id == event.correlation_id
     assert result[0].causation_id == event.event_id
+
+
+@pytest.mark.asyncio
+async def test_coordinator_dispatches_live_pjm_when_requested():
+    from gridregime.oaf.acquisition_coordinator import AcquisitionCoordinatorAgent
+    agent = object.__new__(AcquisitionCoordinatorAgent)
+    agent.name = "grid-acquisition-coordinator"
+    event = EventEnvelope(
+        event_type="grid.acquisition.cycle.requested", source_agent="test",
+        payload={"ba": "PJM", "as_of": "2026-11-07T17:00Z",
+                 "require_pjm": True},
+    )
+    events = await agent.handle_event(event)
+    assert [e.event_type for e in events] == [
+        "grid.eia930.requested", "grid.pjm.live.requested",
+        "grid.acquisition.cycle.dispatched",
+    ]
+    assert events[1].payload["end"] == "2026-11-07T15:00:00+00:00"
+    assert events[2].payload["require_pjm"] is True
