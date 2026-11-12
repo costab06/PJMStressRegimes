@@ -52,9 +52,12 @@ it is **not** a validated risk prediction.
 2. No repository-managed persistent worker deployment currently establishes continuous end-to-end operation. The Redis-backed test drives the agents' handlers directly; it does not run persistent OAF worker loops or establish exactly-once publication.
 3. EIA and PJM publication/revision timestamps are not verified. A historical
    source snapshot can contain revisions unavailable at the decision time.
-4. Redis evidence writes still need source-specific revision ordering and
-   stale-event replay protection. The cycle's dispatch requirements are now
-   rejected if conflicting dispatch payloads are received.
+4. Redis evidence now rejects conflicting per-source payloads for a correlation
+   ID instead of silently overwriting them. This is a conservative interim
+   rule, **not revision-aware ordering**: legitimate source updates require a
+   new cycle or an explicit versioned evidence policy. Status snapshots can
+   still advance from pending to ready in the feature bridge, but status-event
+   revision ordering and exactly-once publication are not established.
 5. The scientific baseline requires explicit approval, frozen reference-period
    provenance and an independent numerical feature oracle.
 6. The status policy deliberately reports
@@ -91,8 +94,8 @@ restarts, storage failures and replay attempts.
 
 ### Replay semantics
 
-The bridge now rejects conflicting dispatch contracts for the same correlation
-ID. A feature request uses a deterministic event ID derived from correlation,
+The status aggregator and bridge reject conflicting immutable evidence for
+one correlation ID; the bridge permits status snapshot transitions. A feature request uses a deterministic event ID derived from correlation,
 source hash and baseline hash. This **does not** establish exactly-once
 publication: the bridge can emit the same event ID more than once on replay,
 and the downstream worker must handle duplicate delivery safely. The evidence
