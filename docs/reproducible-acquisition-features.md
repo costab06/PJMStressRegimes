@@ -44,10 +44,11 @@ it is **not** a validated risk prediction.
 
 ## Explicitly unresolved
 
-1. A pure `plan_feature_request` function now joins dispatched cycle metadata, EIA artifact evidence and acquisition status, verifies the source hash and baseline hash, and separates decision time from observation end. It is not yet wired to OAF events. The OAF acquisition cycle does not yet automatically produce a
-   `grid.features.requested` event. The acquisition artifact, approved
-   baseline and observation/decision timestamps must be assembled and
-   validated by an orchestration component.
+1. The `AcquisitionFeatureBridgeAgent` now consumes cycle dispatch, EIA-fetched
+   and cycle-status events and emits `grid.features.requested` when the
+   evidence is observation-ready. Its pure planner validates the artifact hash,
+   source window and baseline hash. The bridge has event-order tests and a
+   Redis-backed handler integration test; it is not yet deployed as a worker.
 2. No repository-managed persistent worker deployment currently establishes continuous end-to-end operation. The Redis-backed test drives the agents' handlers directly; it does not run persistent OAF worker loops or establish exactly-once publication.
 3. EIA and PJM publication/revision timestamps are not verified. A historical
    source snapshot can contain revisions unavailable at the decision time.
@@ -67,3 +68,34 @@ time, duplicate archival EIA hours and separation of live/archived PJM state.
 
 A passing adapter test suite is **not** a substitute for a full-cycle replay
 test, point-in-time availability verification or scientific validation.
+
+## Deployment readiness and recovery
+
+The existing `python -m gridregime.oaf.schedule_once` command submits a
+single cycle to Redis. It does **not** start OAF workers. A production runner
+must start and supervise these agents with a shared event bus and Redis:
+
+1. `AcquisitionCoordinatorAgent` for cycle requests.
+2. `EIA930AcquisitionAgent` for source acquisition.
+3. `AcquisitionQualityAgent` for observation quality.
+4. `PJMLiveAcquisitionAgent` if PJM is required.
+5. `AcquisitionCycleStatusAgent` for evidence aggregation.
+6. `AcquisitionFeatureBridgeAgent` with a pinned baseline path.
+7. `PointInTimeFeatureAgent` with the same pinned baseline and an output directory.
+
+No repository-managed worker runner is yet provided, and the external OAF
+framework's worker lifecycle API must be verified before adding one. Workers
+must share durable Redis, persistent artifact storage and an immutable baseline
+snapshot. Operators must monitor dead-letter queues, pending cycles, worker
+restarts, storage failures and replay attempts.
+
+### Replay semantics
+
+The bridge now rejects conflicting dispatch contracts for the same correlation
+ID. A feature request uses a deterministic event ID derived from correlation,
+source hash and baseline hash. This **does not** establish exactly-once
+publication: the bridge can emit the same event ID more than once on replay,
+and the downstream worker must handle duplicate delivery safely. The evidence
+aggregator still needs revision-aware ordering; a stale assessment may replace
+a newer assessment. Do not treat current readiness snapshots as an audited
+publication-time evidence ledger.
