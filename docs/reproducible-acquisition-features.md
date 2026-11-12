@@ -44,7 +44,7 @@ it is **not** a validated risk prediction.
 
 ## Explicitly unresolved
 
-1. The OAF acquisition cycle does not yet automatically produce a
+1. A pure `plan_feature_request` function now joins dispatched cycle metadata, EIA artifact evidence and acquisition status, verifies the source hash and baseline hash, and separates decision time from observation end. It is not yet wired to OAF events. The OAF acquisition cycle does not yet automatically produce a
    `grid.features.requested` event. The acquisition artifact, approved
    baseline and observation/decision timestamps must be assembled and
    validated by an orchestration component.
