@@ -54,7 +54,8 @@ class AcquisitionCycleStatusAgent(BaseAgent):
     """Use Redis as durable aggregation state, not process-local dictionaries.
 
     State keys are keyed by OAF correlation ID. A Lua script performs a
-    single-event update atomically, so replay cannot remove other evidence.
+    single-event update atomically. Identical replay is accepted; conflicting
+    evidence is rejected until source revisions can be explicitly ordered.
     This status event is a snapshot, not an exactly-once transition feed.
     """
 
@@ -79,11 +80,9 @@ class AcquisitionCycleStatusAgent(BaseAgent):
         key = f"grid:cycle:evidence:{event.correlation_id}"
         # Avoid lost updates when several agents finish simultaneously.
         script = """
-        if ARGV[1] == "dispatch" then
-            local prior = redis.call("HGET", KEYS[1], "dispatch")
-            if prior and prior ~= ARGV[2] then
-                return redis.error_reply("CONFLICTING_CYCLE_DISPATCH")
-            end
+        local prior = redis.call("HGET", KEYS[1], ARGV[1])
+        if prior and prior ~= ARGV[2] then
+            return redis.error_reply("CONFLICTING_CYCLE_EVIDENCE")
         end
         redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
         return redis.call('HGETALL', KEYS[1])
