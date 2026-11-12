@@ -17,6 +17,8 @@ class FakeRedis:
 
     async def eval(self, script, count, key, field, encoded):
         fields = self.data.setdefault(key, {})
+        if field == "dispatch" and field in fields and fields[field] != encoded:
+            raise ValueError("CONFLICTING_CYCLE_DISPATCH")
         fields[field] = encoded
         return [v.encode() for pair in fields.items() for v in pair]
 
@@ -95,3 +97,22 @@ async def test_bridge_does_not_request_features_for_unready_cycle(tmp_path):
             correlation_id=cid, payload=payloads[kind],
         ))
         assert results == []
+
+
+@pytest.mark.asyncio
+async def test_bridge_rejects_conflicting_dispatch_replay(tmp_path):
+    baseline, payloads = fixtures(tmp_path)
+    agent = object.__new__(AcquisitionFeatureBridgeAgent)
+    agent.name = "grid-acquisition-feature-bridge"
+    agent.baseline_path = baseline
+    agent.event_bus = Bus()
+    cid = uuid4()
+    first = EventEnvelope(event_type=DISPATCHED, source_agent="test",
+                          correlation_id=cid, payload=payloads[DISPATCHED])
+    assert await agent.handle_event(first) == []
+    changed = dict(payloads[DISPATCHED], require_pjm=True)
+    with pytest.raises(ValueError, match="CONFLICTING_CYCLE_DISPATCH"):
+        await agent.handle_event(EventEnvelope(
+            event_type=DISPATCHED, source_agent="test",
+            correlation_id=cid, payload=changed,
+        ))
