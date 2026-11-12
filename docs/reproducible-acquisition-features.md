@@ -107,7 +107,7 @@ publication-time evidence ledger.
 
 ## Dependency reproducibility
 
-CI pins OpenAgentFabric to commit
+The targeted CI suite explicitly includes the planner, bridge, Redis-backed\nintegration and worker-runner tests, in addition to the full test suite.\n\nCI pins OpenAgentFabric to commit
 `1cb2680cfc78df271726dc17be3434e120012f6c` rather than following
 its mutable default branch. The runtime deployment must use that same commit
 until an explicit upgrade and regression test. The worker requires source and
