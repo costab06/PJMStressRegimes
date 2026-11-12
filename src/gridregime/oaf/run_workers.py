@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import sys
 from pathlib import Path
 
 from shared.correlation.registry import CorrelationRegistry
@@ -43,6 +44,8 @@ def build_agents(*, bus, registry, baseline_path: Path, artifact_dir: Path):
 
 
 async def run(*, redis_url: str, baseline_path: Path, artifact_dir: Path):
+    if sys.version_info < (3, 11):
+        raise RuntimeError('OAF worker runner requires Python 3.11 or later')
     bus = RedisEventBus(redis_url=redis_url)
     try:
         registry = CorrelationRegistry(bus.redis)
