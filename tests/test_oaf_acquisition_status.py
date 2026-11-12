@@ -53,8 +53,8 @@ async def test_status_preserves_archived_and_live_pjm_evidence():
         async def eval(self, script, nkeys, key, field, value):
             import json
             state = self.hashes.setdefault(key, {})
-            if field == "dispatch" and "dispatch" in state and state["dispatch"] != value:
-                raise ValueError("CONFLICTING_CYCLE_DISPATCH")
+            if field in state and state[field] != value:
+                raise ValueError("CONFLICTING_CYCLE_EVIDENCE")
             state[field] = value
             return [part.encode() for pair in state.items() for part in pair]
 
@@ -74,3 +74,36 @@ async def test_status_preserves_archived_and_live_pjm_evidence():
     assert "pjm_live" in state
     assert "pjm_archive" in state
     assert state["pjm_live"] != state["pjm_archive"]
+
+
+@pytest.mark.asyncio
+async def test_status_rejects_conflicting_eia_evidence(tmp_path):
+    from uuid import uuid4
+    from shared.eventbus.events import EventEnvelope
+    from gridregime.oaf.acquisition_status import AcquisitionCycleStatusAgent, EIA_ASSESSED
+
+    class Redis:
+        def __init__(self):
+            self.values = {}
+
+        async def eval(self, script, nkeys, key, field, value):
+            state = self.values.setdefault(key, {})
+            if field in state and state[field] != value:
+                raise ValueError("CONFLICTING_CYCLE_EVIDENCE")
+            state[field] = value
+            return [part.encode() for pair in state.items() for part in pair]
+
+    class Bus:
+        redis = Redis()
+
+    agent = object.__new__(AcquisitionCycleStatusAgent)
+    agent.name = "grid-acquisition-status"
+    agent.event_bus = Bus()
+    cid = uuid4()
+    def event(status):
+        return EventEnvelope(event_type=EIA_ASSESSED, source_agent="test",
+                             correlation_id=cid, payload={"status": status})
+    await agent.handle_event(event("stale"))
+    await agent.handle_event(event("stale"))
+    with pytest.raises(ValueError, match="CONFLICTING_CYCLE_EVIDENCE"):
+        await agent.handle_event(event("observations-current-publication-unverified"))
