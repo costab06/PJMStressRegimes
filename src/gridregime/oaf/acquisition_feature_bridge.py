@@ -31,6 +31,12 @@ INPUT_FIELDS = {
 # An atomic snapshot of the evidence after each event update. A deterministic
 # event ID makes repeat proposals identifiable to downstream OAF processing.
 UPDATE_AND_READ = """
+if ARGV[1] == 'dispatch' then
+    local old = redis.call('HGET', KEYS[1], 'dispatch')
+    if old and old ~= ARGV[2] then
+        return redis.error_reply('CONFLICTING_CYCLE_DISPATCH')
+    end
+end
 redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
 return redis.call('HGETALL', KEYS[1])
 """
