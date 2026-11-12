@@ -71,14 +71,20 @@ class AcquisitionCycleStatusAgent(BaseAgent):
         field = {
             DISPATCHED: "dispatch",
             EIA_ASSESSED: "eia",
-            PJM_FETCHED: "pjm",
-            PJM_LIVE_FETCHED: "pjm",
+            PJM_FETCHED: "pjm_archive",
+            PJM_LIVE_FETCHED: "pjm_live",
         }.get(event.event_type)
         if field is None:
             raise ValueError("Unsupported evidence event")
         key = f"grid:cycle:evidence:{event.correlation_id}"
         # Avoid lost updates when several agents finish simultaneously.
         script = """
+        if ARGV[1] == "dispatch" then
+            local prior = redis.call("HGET", KEYS[1], "dispatch")
+            if prior and prior ~= ARGV[2] then
+                return redis.error_reply("CONFLICTING_CYCLE_DISPATCH")
+            end
+        end
         redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
         return redis.call('HGETALL', KEYS[1])
         """
@@ -93,7 +99,7 @@ class AcquisitionCycleStatusAgent(BaseAgent):
         result = evaluate_cycle(
             dispatch=decoded.get("dispatch"),
             eia=decoded.get("eia"),
-            pjm=decoded.get("pjm"),
+            pjm=decoded.get("pjm_live"),
             require_pjm=bool(decoded.get("dispatch", {}).get("require_pjm", False)),
         )
         return [EventEnvelope(
