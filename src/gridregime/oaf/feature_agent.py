@@ -111,6 +111,10 @@ class PointInTimeFeatureAgent(BaseAgent):
         if event.event_type != REQUESTED or not isinstance(event.payload, dict):
             raise ValueError("Unexpected feature request")
         p = event.payload
+        if "baseline_sha256" not in p or "source_sha256" not in p:
+            raise ValueError("Feature request requires pinned source and baseline hashes")
+        if "baseline_path" in p and Path(p["baseline_path"]).resolve() != self.baseline_path.resolve():
+            raise ValueError("Feature request baseline path differs from worker configuration")
         if "baseline_sha256" in p:
             actual_baseline_hash = hashlib.sha256(self.baseline_path.read_bytes()).hexdigest()
             if actual_baseline_hash != p["baseline_sha256"]:
