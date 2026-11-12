@@ -58,8 +58,10 @@ it is **not** a validated risk prediction.
    new cycle or an explicit versioned evidence policy. Status snapshots can
    still advance from pending to ready in the feature bridge, but status-event
    revision ordering and exactly-once publication are not established.
-5. The scientific baseline requires explicit approval, frozen reference-period
-   provenance and an independent numerical feature oracle.
+5. The feature worker now verifies the planner-supplied baseline and source
+   hashes again at execution, rejecting modified inputs. Formal baseline
+   approval, frozen reference-period provenance and an independent numerical
+   feature oracle are still required.
 6. The status policy deliberately reports
    `ready_for_predictive_inference=False`.
 
