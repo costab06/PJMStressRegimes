@@ -115,3 +115,27 @@ baseline SHA-256 pins on every feature request and checks the baseline path
 against its configured baseline before computing features. This protects
 against accidental artifact substitution; it is not formal scientific
 approval of the baseline.
+
+
+## Baseline manifest gate
+
+The persistent worker runner now **requires** an explicit baseline manifest and
+verifies its SHA-256 before opening Redis or starting any worker. Example:
+
+```json
+{
+  "schema_version": 1,
+  "feature_version": "frozen-v1",
+  "sha256": "<64-character SHA-256 of the exact Parquet file>",
+  "reference_period_start_utc": "2021-01-01T00:00:00Z",
+  "reference_period_end_utc": "2022-01-01T00:00:00Z",
+  "approval_id": "<real research approval or review identifier>"
+}
+```
+
+Do not fabricate an approval identifier or infer scientific approval from the
+manifest alone. The gate validates the declared metadata and byte identity;
+it does **not** verify baseline sampling eligibility, source revisions, or
+that the stated approval actually occurred. Those remain research governance
+requirements. The bridge and feature worker also check baseline hashes per
+cycle to detect changes after startup.
