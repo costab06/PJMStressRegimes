@@ -33,7 +33,7 @@ def build_agents(*, bus, registry, baseline_path: Path, artifact_dir: Path):
         AcquisitionCoordinatorAgent(**common),
         EIA930AcquisitionAgent(output_dir=artifact_dir / "eia930", **common),
         AcquisitionQualityAgent(**common),
-        PJMLiveAcquisitionAgent(**common),
+        PJMLiveAcquisitionAgent(output_dir=artifact_dir / "pjm-live", **common),
         AcquisitionCycleStatusAgent(**common),
         AcquisitionFeatureBridgeAgent(baseline_path=baseline_path, **common),
         PointInTimeFeatureAgent(
