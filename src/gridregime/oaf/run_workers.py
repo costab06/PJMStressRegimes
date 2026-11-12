@@ -16,6 +16,7 @@ from pathlib import Path
 from shared.correlation.registry import CorrelationRegistry
 from shared.eventbus.redis import RedisEventBus
 
+from gridregime.oaf.baseline_manifest import verify_baseline_manifest
 from gridregime.oaf.acquisition_coordinator import AcquisitionCoordinatorAgent
 from gridregime.oaf.acquisition_quality import AcquisitionQualityAgent
 from gridregime.oaf.acquisition_status import AcquisitionCycleStatusAgent
@@ -43,9 +44,13 @@ def build_agents(*, bus, registry, baseline_path: Path, artifact_dir: Path):
     ]
 
 
-async def run(*, redis_url: str, baseline_path: Path, artifact_dir: Path):
+async def run(*, redis_url: str, baseline_path: Path, artifact_dir: Path,
+              baseline_manifest: Path | None = None):
     if sys.version_info < (3, 11):
         raise RuntimeError('OAF worker runner requires Python 3.11 or later')
+    if baseline_manifest is None:
+        raise ValueError('Production worker requires --baseline-manifest')
+    verify_baseline_manifest(baseline_path=baseline_path, manifest_path=baseline_manifest)
     bus = RedisEventBus(redis_url=redis_url)
     try:
         registry = CorrelationRegistry(bus.redis)
@@ -67,12 +72,14 @@ def main():
     parser.add_argument("--redis-url", default="redis://localhost:6379/0")
     parser.add_argument("--baseline-path", type=Path, required=True)
     parser.add_argument("--artifact-dir", type=Path, required=True)
+    parser.add_argument("--baseline-manifest", type=Path, required=True)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     try:
         asyncio.run(run(
             redis_url=args.redis_url, baseline_path=args.baseline_path,
             artifact_dir=args.artifact_dir,
+            baseline_manifest=args.baseline_manifest,
         ))
     except KeyboardInterrupt:
         pass
