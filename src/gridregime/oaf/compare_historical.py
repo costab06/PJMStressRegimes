@@ -38,7 +38,9 @@ def compare_window(ba: str, start: str, end: str, output_dir: Path,
             raise FileNotFoundError(f"Missing cached EIA-930 months: {missing}")
         original = pd.concat([pd.read_parquet(p) for p in paths], ignore_index=True)
         original["timestamp_utc"] = pd.to_datetime(original["timestamp_utc"], utc=True)
-        original = original.drop_duplicates("timestamp_utc").sort_values("timestamp_utc")
+        if original["timestamp_utc"].duplicated().any():
+            raise ValueError("Duplicate UTC timestamps in historical cache; resolve source revisions explicitly")
+        original = original.sort_values("timestamp_utc")
         original = original.loc[original["timestamp_utc"].between(
             t0.tz_localize("UTC"), t1.tz_localize("UTC"))].reset_index(drop=True)
         source_hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
