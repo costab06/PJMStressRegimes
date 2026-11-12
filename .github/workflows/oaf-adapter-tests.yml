@@ -47,6 +47,6 @@ jobs:
           python -m pip install -e ./OpenAgentFabric
           python -m pip install pytest-asyncio
       - name: Run provenance and adapter tests
-        run: python -m pytest -q tests/test_provenance.py tests/test_oaf_eia930.py tests/test_oaf_eia930_redis.py tests/test_oaf_historical_comparison.py tests/test_oaf_feature_agent.py tests/test_oaf_acquisition_coordinator.py tests/test_oaf_cycle_scheduler.py tests/test_oaf_pjm_procedures.py tests/test_oaf_acquisition_status.py tests/test_oaf_pjm_live.py tests/test_oaf_feature_request_planner.py tests/test_oaf_acquisition_feature_bridge.py tests/test_oaf_acquisition_feature_integration.py tests/test_oaf_run_workers.py tests/test_oaf_baseline_manifest.py
+        run: python -m pytest -q tests/test_provenance.py tests/test_oaf_eia930.py tests/test_oaf_eia930_redis.py tests/test_oaf_historical_comparison.py tests/test_oaf_feature_agent.py tests/test_oaf_acquisition_coordinator.py tests/test_oaf_cycle_scheduler.py tests/test_oaf_pjm_procedures.py tests/test_oaf_acquisition_status.py tests/test_oaf_pjm_live.py tests/test_oaf_feature_request_planner.py tests/test_oaf_acquisition_feature_bridge.py tests/test_oaf_acquisition_feature_integration.py tests/test_oaf_run_workers.py tests/test_oaf_baseline_manifest.py tests/test_oaf_worker_recovery.py
       - name: Run existing PJM tests
         run: python -m pytest -q tests
