@@ -49,7 +49,7 @@ it is **not** a validated risk prediction.
    evidence is observation-ready. Its pure planner validates the artifact hash,
    source window and baseline hash. The bridge has event-order tests and a
    Redis-backed handler integration test; it is not yet deployed as a worker.
-2. No repository-managed persistent worker deployment currently establishes continuous end-to-end operation. The Redis-backed test drives the agents' handlers directly; it does not run persistent OAF worker loops or establish exactly-once publication.
+2. A repository-managed worker runner now starts the seven OAF consumers using\n   a shared Redis event bus. Its construction has smoke tests; a deployed\n   persistent end-to-end run, restart/recovery test, and operations monitoring\n   are not yet verified. The Redis-backed integration test drives handlers\n   directly and does not establish exactly-once publication.
 3. EIA and PJM publication/revision timestamps are not verified. A historical
    source snapshot can contain revisions unavailable at the decision time.
 4. Redis evidence now rejects conflicting per-source payloads for a correlation
@@ -88,8 +88,7 @@ must start and supervise these agents with a shared event bus and Redis:
 6. `AcquisitionFeatureBridgeAgent` with a pinned baseline path.
 7. `PointInTimeFeatureAgent` with the same pinned baseline and an output directory.
 
-No repository-managed worker runner is yet provided, and the external OAF
-framework's worker lifecycle API must be verified before adding one. Workers
+The repository now includes a worker runner using OAF's verified `BaseAgent.run`\nAPI and `RedisEventBus`. Start it with:\n\n```bash\npython -m gridregime.oaf.run_workers \\\n  --redis-url redis://localhost:6379/0 \\\n  --baseline-path /persistent/baseline/frozen-v1.parquet \\\n  --artifact-dir /persistent/gridregime/artifacts\n```\n\nSubmit cycles separately using `python -m gridregime.oaf.schedule_once`.\nThe runner has not yet been validated under a process supervisor or with\ncrash/restart and network-partition tests. The live PJM adapter also needs\n`gridstatus` installed if PJM is enabled. Workers
 must share durable Redis, persistent artifact storage and an immutable baseline
 snapshot. Operators must monitor dead-letter queues, pending cycles, worker
 restarts, storage failures and replay attempts.
@@ -104,3 +103,15 @@ and the downstream worker must handle duplicate delivery safely. The evidence
 aggregator still needs revision-aware ordering; a stale assessment may replace
 a newer assessment. Do not treat current readiness snapshots as an audited
 publication-time evidence ledger.
+
+
+## Dependency reproducibility
+
+CI pins OpenAgentFabric to commit
+`1cb2680cfc78df271726dc17be3434e120012f6c` rather than following
+its mutable default branch. The runtime deployment must use that same commit
+until an explicit upgrade and regression test. The worker requires source and
+baseline SHA-256 pins on every feature request and checks the baseline path
+against its configured baseline before computing features. This protects
+against accidental artifact substitution; it is not formal scientific
+approval of the baseline.
