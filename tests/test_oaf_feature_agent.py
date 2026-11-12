@@ -96,3 +96,52 @@ def test_decision_time_is_distinct_from_observation_end(tmp_path):
             decision_as_of="2022-12-20T03:00Z",
             ba="PJM", output_dir=tmp_path / "features",
         )
+
+
+@pytest.mark.asyncio
+async def test_feature_agent_rejects_changed_pinned_baseline(tmp_path):
+    import hashlib
+    from uuid import uuid4
+    from shared.eventbus.events import EventEnvelope
+    from gridregime.oaf.feature_agent import PointInTimeFeatureAgent, REQUESTED
+
+    _, _, src, baseline = inputs(tmp_path)
+    agent = object.__new__(PointInTimeFeatureAgent)
+    agent.name = "grid-features"
+    agent.baseline_path = baseline
+    agent.output_dir = tmp_path / "features"
+    event = EventEnvelope(
+        event_type=REQUESTED, source_agent="test", correlation_id=uuid4(),
+        payload={
+            "artifact_path": str(src), "as_of": "2022-12-20T04:00Z",
+            "decision_as_of": "2022-12-20T06:00Z", "ba": "PJM",
+            "source_sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
+            "baseline_sha256": "0" * 64,
+        },
+    )
+    with pytest.raises(ValueError, match="Frozen baseline checksum mismatch"):
+        await agent.handle_event(event)
+
+
+@pytest.mark.asyncio
+async def test_feature_agent_rejects_changed_pinned_source(tmp_path):
+    import hashlib
+    from uuid import uuid4
+    from shared.eventbus.events import EventEnvelope
+    from gridregime.oaf.feature_agent import PointInTimeFeatureAgent, REQUESTED
+
+    _, _, src, baseline = inputs(tmp_path)
+    agent = object.__new__(PointInTimeFeatureAgent)
+    agent.name = "grid-features"
+    agent.baseline_path = baseline
+    agent.output_dir = tmp_path / "features"
+    event = EventEnvelope(
+        event_type=REQUESTED, source_agent="test", correlation_id=uuid4(),
+        payload={
+            "artifact_path": str(src), "as_of": "2022-12-20T04:00Z",
+            "ba": "PJM", "source_sha256": "0" * 64,
+            "baseline_sha256": hashlib.sha256(baseline.read_bytes()).hexdigest(),
+        },
+    )
+    with pytest.raises(ValueError, match="Source artifact checksum mismatch"):
+        await agent.handle_event(event)
