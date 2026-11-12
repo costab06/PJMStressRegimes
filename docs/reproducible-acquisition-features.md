@@ -48,8 +48,7 @@ it is **not** a validated risk prediction.
    `grid.features.requested` event. The acquisition artifact, approved
    baseline and observation/decision timestamps must be assembled and
    validated by an orchestration component.
-2. No repository-managed persistent worker deployment or full-cycle
-   integration test currently establishes end-to-end operation.
+2. No repository-managed persistent worker deployment currently establishes continuous end-to-end operation. The Redis-backed test drives the agents' handlers directly; it does not run persistent OAF worker loops or establish exactly-once publication.
 3. EIA and PJM publication/revision timestamps are not verified. A historical
    source snapshot can contain revisions unavailable at the decision time.
 4. Redis evidence writes still need source-specific revision ordering and
