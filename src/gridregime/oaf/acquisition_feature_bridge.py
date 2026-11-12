@@ -32,7 +32,7 @@ INPUT_FIELDS = {
 # event ID makes repeat proposals identifiable to downstream OAF processing.
 UPDATE_AND_READ = """
 local old = redis.call('HGET', KEYS[1], ARGV[1])
-if old and old ~= ARGV[2] then
+if ARGV[1] ~= 'status' and old and old ~= ARGV[2] then
     return redis.error_reply('CONFLICTING_CYCLE_EVIDENCE')
 end
 redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
