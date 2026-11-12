@@ -111,6 +111,14 @@ class PointInTimeFeatureAgent(BaseAgent):
         if event.event_type != REQUESTED or not isinstance(event.payload, dict):
             raise ValueError("Unexpected feature request")
         p = event.payload
+        if "baseline_sha256" in p:
+            actual_baseline_hash = hashlib.sha256(self.baseline_path.read_bytes()).hexdigest()
+            if actual_baseline_hash != p["baseline_sha256"]:
+                raise ValueError("Frozen baseline checksum mismatch")
+        if "source_sha256" in p:
+            actual_source_hash = hashlib.sha256(Path(p["artifact_path"]).read_bytes()).hexdigest()
+            if actual_source_hash != p["source_sha256"]:
+                raise ValueError("Source artifact checksum mismatch")
         result = await asyncio.to_thread(
             compute_point_in_time_features,
             source_path=p["artifact_path"], baseline_path=self.baseline_path,
