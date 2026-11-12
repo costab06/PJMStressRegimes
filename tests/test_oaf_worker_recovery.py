@@ -74,9 +74,21 @@ async def test_abandoned_pending_event_is_recovered_and_committed():
 
         # Replacement worker starts with a different consumer identity and
         # processes the pending record through OAF's recovery implementation.
-        await probe._recover_pending_once()
-        # Recovery is only active while the agent's run flag is set; explicitly
-        # enable it for this bounded recovery call.
+        probe._running = True
+        try:
+            await probe._recover_pending_once()
+        finally:
+            probe.stop()
+        terminal = await bus.get_terminal_state(stream, probe.group, event.event_id)
+        assert terminal == 'committed'
+        records = await bus.redis.xrange(stream)
+        completed = [EventEnvelope.model_validate_json(fields['event'])
+                     for _, fields in records
+                     if EventEnvelope.model_validate_json(fields['event']).event_type
+                     == 'grid.test.recovery.completed']
+        assert len(completed) == 1
+        assert completed[0].correlation_id == cid
+        assert await bus.redis.xpending_range(stream, probe.group, '-', '+', 10) == []
     finally:
         await bus.redis.delete(stream)
         await bus.redis.aclose()
