@@ -31,3 +31,17 @@ def test_runner_rejects_missing_baseline(tmp_path):
             baseline_path=tmp_path / "missing.parquet",
             artifact_dir=tmp_path / "artifacts",
         )
+
+
+@pytest.mark.asyncio
+async def test_runner_rejects_python_without_taskgroup(monkeypatch, tmp_path):
+    import sys
+    from gridregime.oaf.run_workers import run
+
+    monkeypatch.setattr(sys, "version_info", (3, 10, 0))
+    with pytest.raises(RuntimeError, match="Python 3.11"):
+        await run(
+            redis_url="redis://localhost:6379/0",
+            baseline_path=tmp_path / "baseline.parquet",
+            artifact_dir=tmp_path / "artifacts",
+        )
