@@ -77,3 +77,22 @@ def test_reject_duplicate_timestamp(tmp_path):
     pd.concat([frame, frame.iloc[-1:]]).to_csv(src, index=False)
     with pytest.raises(ValueError, match="Duplicate"):
         compute(tmp_path, src, base)
+
+
+def test_decision_time_is_distinct_from_observation_end(tmp_path):
+    _, _, src, base = inputs(tmp_path)
+    result = compute_point_in_time_features(
+        source_path=src, baseline_path=base,
+        as_of="2022-12-20T04:00Z",
+        decision_as_of="2022-12-20T06:00Z",
+        ba="PJM", output_dir=tmp_path / "features",
+    )
+    assert result["as_of"] == "2022-12-20T04:00:00+00:00"
+    assert result["decision_as_of"] == "2022-12-20T06:00:00+00:00"
+    with pytest.raises(ValueError, match="decision_as_of"):
+        compute_point_in_time_features(
+            source_path=src, baseline_path=base,
+            as_of="2022-12-20T04:00Z",
+            decision_as_of="2022-12-20T03:00Z",
+            ba="PJM", output_dir=tmp_path / "features",
+        )
