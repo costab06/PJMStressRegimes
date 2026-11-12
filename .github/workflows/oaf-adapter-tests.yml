@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: costab06/OpenAgentFabric
+          ref: 1cb2680cfc78df271726dc17be3434e120012f6c
           path: OpenAgentFabric
       - name: Set up Python
         uses: actions/setup-python@v5
