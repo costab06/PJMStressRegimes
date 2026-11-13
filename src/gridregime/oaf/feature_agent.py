@@ -28,6 +28,7 @@ REQUIRED = ("timestamp_utc", "ba", "demand_mwh", "forecast_mwh", "interchange_mw
 def compute_point_in_time_features(
     *, source_path: str | Path, baseline_path: str | Path,
     as_of: str, ba: str, output_dir: str | Path,
+    decision_as_of: str | None = None,
 ) -> dict:
     """Compute features without observing anything after the decision timestamp.
 
@@ -38,6 +39,10 @@ def compute_point_in_time_features(
     asof = asof.tz_localize("UTC") if asof.tzinfo is None else asof.tz_convert("UTC")
     if asof != asof.floor("h"):
         raise ValueError("as_of must be a whole UTC hour")
+    decision = asof if decision_as_of is None else pd.Timestamp(decision_as_of)
+    decision = decision.tz_localize("UTC") if decision.tzinfo is None else decision.tz_convert("UTC")
+    if decision != decision.floor("h") or decision < asof:
+        raise ValueError("decision_as_of must be a whole UTC hour not before observation as_of")
     source_path, baseline_path = Path(source_path), Path(baseline_path)
     raw_bytes, baseline_bytes = source_path.read_bytes(), baseline_path.read_bytes()
     frame = pd.read_csv(source_path)
@@ -64,7 +69,8 @@ def compute_point_in_time_features(
     if not all(np.isfinite(v) for v in values.values()):
         raise ValueError("Feature computation produced non-finite values")
     report = {
-        "as_of": asof.isoformat(), "ba": ba, "feature_version": "frozen-v1",
+        "as_of": asof.isoformat(), "decision_as_of": decision.isoformat(),
+        "ba": ba, "feature_version": "frozen-v1",
         "features": values, "source_sha256": hashlib.sha256(raw_bytes).hexdigest(),
         "baseline_sha256": hashlib.sha256(baseline_bytes).hexdigest(),
         "status": "features-only-not-a-risk-prediction",
@@ -105,10 +111,23 @@ class PointInTimeFeatureAgent(BaseAgent):
         if event.event_type != REQUESTED or not isinstance(event.payload, dict):
             raise ValueError("Unexpected feature request")
         p = event.payload
+        if "baseline_sha256" not in p or "source_sha256" not in p:
+            raise ValueError("Feature request requires pinned source and baseline hashes")
+        if "baseline_path" in p and Path(p["baseline_path"]).resolve() != self.baseline_path.resolve():
+            raise ValueError("Feature request baseline path differs from worker configuration")
+        if "baseline_sha256" in p:
+            actual_baseline_hash = hashlib.sha256(self.baseline_path.read_bytes()).hexdigest()
+            if actual_baseline_hash != p["baseline_sha256"]:
+                raise ValueError("Frozen baseline checksum mismatch")
+        if "source_sha256" in p:
+            actual_source_hash = hashlib.sha256(Path(p["artifact_path"]).read_bytes()).hexdigest()
+            if actual_source_hash != p["source_sha256"]:
+                raise ValueError("Source artifact checksum mismatch")
         result = await asyncio.to_thread(
             compute_point_in_time_features,
             source_path=p["artifact_path"], baseline_path=self.baseline_path,
-            as_of=p["as_of"], ba=p["ba"], output_dir=self.output_dir,
+            as_of=p["as_of"], decision_as_of=p.get("decision_as_of"),
+            ba=p["ba"], output_dir=self.output_dir,
         )
         return [EventEnvelope(
             event_type=COMPUTED, source_agent=str(self.name),

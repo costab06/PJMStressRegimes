@@ -48,7 +48,7 @@ async def submit_cycle(
     """
     plan = plan_acquisition_cycle(
         ba=ba, as_of=as_of, lookback_hours=lookback_hours,
-        publication_lag_hours=publication_lag_hours,
+        publication_lag_hours=publication_lag_hours, require_pjm=require_pjm,
     )
     instant = datetime.fromisoformat(plan["as_of"])
     fields = {k: plan[k] for k in ("ba", "lookback_hours", "publication_lag_hours", "require_pjm")}

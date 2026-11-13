@@ -102,3 +102,16 @@ def test_quality_reject_duplicate(tmp_path):
             artifact_path=path, end="2026-11-07T15:00Z", ba="PJM",
             checked_at="2026-11-07T17:00Z",
         )
+
+
+@pytest.mark.asyncio
+async def test_scheduler_require_pjm_propagates_to_plan_and_identity():
+    redis = FakeRedis()
+    registry = CorrelationRegistry(redis)
+    args = dict(redis=redis, correlation_registry=registry, ba="PJM",
+                as_of="2026-11-07T17:00Z")
+    no_pjm = await submit_cycle(**args)
+    with_pjm = await submit_cycle(**args, require_pjm=True)
+    assert with_pjm["plan"]["require_pjm"] is True
+    assert with_pjm["correlation_id"] != no_pjm["correlation_id"]
+    assert redis.events[1][1]["payload"]["require_pjm"] is True

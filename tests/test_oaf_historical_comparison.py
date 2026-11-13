@@ -72,3 +72,17 @@ def test_offline_comparison_requires_complete_month_cache(tmp_path):
             "PJM", "2022-12-20T00", "2022-12-20T01",
             tmp_path / "out", cache_dir=tmp_path, offline=True,
         )
+
+
+def test_offline_comparison_rejects_duplicate_source_hours(monkeypatch, tmp_path):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    duplicated = pd.concat([sample(), sample().iloc[[0]]], ignore_index=True)
+    duplicated.to_parquet(cache / "PJM_2022-12.parquet", index=False)
+    monkeypatch.setattr(compare_historical, "fetch_window",
+                        lambda *_: (_ for _ in ()).throw(AssertionError("API called")))
+    with pytest.raises(ValueError, match="Duplicate UTC timestamps"):
+        compare_historical.compare_window(
+            "PJM", "2022-12-20T00", "2022-12-20T01",
+            tmp_path / "out", cache_dir=cache, offline=True,
+        )
