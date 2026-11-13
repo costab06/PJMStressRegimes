@@ -105,7 +105,7 @@ def persist_eia_window(
         "revision_history_verified": False,
     }
     sidecar = output_dir / f"eia930-{digest}.provenance.json"
-    encoded = (json.dumps(provenance, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+    encoded = (json.dumps(provenance, sort_keys=True, separators=(",", ":")) + "\n").encode()
     if sidecar.exists():
         if sidecar.read_bytes() != encoded:
             raise ValueError("Existing EIA provenance sidecar differs from snapshot")
