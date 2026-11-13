@@ -89,6 +89,38 @@ def fetch_event_data(event: pd.Series, skip_generation: bool = False) -> pd.Data
     return pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
 
 
+def clean_isolated_sentinels(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace isolated sentinel observations only in derived data, with audit columns.
+
+    Raw monthly cache is never modified. Multi-hour runs and edge observations
+    remain missing and must fail validation rather than being fabricated.
+    """
+    from gridregime.clean.validate import EIA_SENTINELS
+
+    result = df.copy()
+    for col in ("demand_mwh", "forecast_mwh", "interchange_mwh"):
+        if col not in result:
+            continue
+        mask = result[col].isin(EIA_SENTINELS)
+        if not mask.any():
+            continue
+        result[f"{col}_source_sentinel"] = mask
+        result[f"{col}_source_value"] = result[col].where(mask)
+        result.loc[mask, col] = float("nan")
+        values = result[col]
+        before = values.shift(1)
+        after = values.shift(-1)
+        times = pd.to_datetime(result["timestamp_utc"], utc=True)
+        contiguous = ((times - times.shift(1) == pd.Timedelta(hours=1)) &
+                      (times.shift(-1) - times == pd.Timedelta(hours=1)))
+        eligible = mask & contiguous & before.notna() & after.notna()
+        result.loc[eligible, col] = (before[eligible] + after[eligible]) / 2
+        result[f"{col}_imputed"] = eligible
+        print(f"  Cleaning {col}: {int(eligible.sum())} isolated sentinel(s) interpolated; "
+              f"{int((mask & ~eligible).sum())} unresolved")
+    return result
+
+
 def annotate_window(df: pd.DataFrame, event: pd.Series) -> pd.DataFrame:
     """Add hours_to_event column aligned to operator_action_time (or window_start)."""
     ref = event.get("operator_action_time")
@@ -231,6 +263,7 @@ def run(
         # ------------------------------------------------------------------
         win_start = event["window_start"] - pd.Timedelta(hours=PRE_HOURS)
         win_end = event["event_end"] + pd.Timedelta(hours=POST_HOURS)
+        df = clean_isolated_sentinels(df)
         checks = validate(df, event["event_id"], win_start, win_end)
         print_report(checks, event["event_id"])
 
