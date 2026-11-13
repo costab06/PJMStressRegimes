@@ -10,7 +10,7 @@ tz_utc       Is the timestamp column timezone-aware UTC?
 no_dst       No 23h or 25h days (DST artifact from wrong timezone handling).
 no_dups      No duplicate timestamps within the window.
 no_gaps      No gaps longer than GAP_WARN_HOURS in the core series.
-sentinels    No EIA sentinel values (9999, -9999) in numeric columns.
+sentinels    No unambiguous negative placeholder codes in numeric columns.
 demand_pos   All demand values are positive.
 interchange  Interchange is bounded to a plausible MW range.
 df_era       Forecast column is NaN-only before DF_START (expected absence).
@@ -32,7 +32,7 @@ DF_START = pd.Timestamp("2015-07-01", tz="UTC")
 GAP_WARN_HOURS = 3
 
 # EIA sentinel values that should be treated as missing, not real data
-EIA_SENTINELS = {9999, -9999, 99999, -99999}
+EIA_SENTINELS = {-9999, -99999}  # Positive 99999 MW is plausible PJM demand
 
 # Demand sanity bounds for PJM (MW). Extreme cold/heat peaks are ~165 GW.
 DEMAND_MIN_MW = 10_000
@@ -205,7 +205,7 @@ def validate(
         results.append(CheckResult(
             "sentinels", False, "FAIL",
             f"Sentinel values found: {sentinel_hits}. "
-            f"These must be replaced with NaN before interpolation."
+            f"These require source-specific review before any correction."
         ))
     else:
         results.append(CheckResult(
