@@ -67,6 +67,16 @@ async def test_redis_cycle_produces_reproducible_frozen_features(tmp_path):
         eia.output_dir = tmp_path / "eia"
         eia.fetcher = lambda ba, start, end: observations.copy()
         fetched = (await eia.handle_event(eia_request))[0]
+        from gridregime.oaf.eia_revision_ledger import list_versions, assert_point_in_time_eligible
+        versions = list_versions(
+            ledger_dir=eia.output_dir / "revisions", ba="PJM",
+            start="2022-12-20T00:00:00+00:00",
+            end="2022-12-20T04:00:00+00:00",
+        )
+        assert len(versions) == 1
+        assert versions[0]["sha256"] == fetched.payload["sha256"]
+        with pytest.raises(ValueError, match="publication time is unverified"):
+            assert_point_in_time_eligible(versions[0], "2022-12-20T06:00:00Z")
 
         assessed = assess_eia_artifact(
             artifact_path=fetched.payload["artifact_path"],
