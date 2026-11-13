@@ -74,6 +74,15 @@ def validate(
         List of CheckResult objects. Print them or inspect .passed / .level.
     """
     results: list[CheckResult] = []
+    required = ("demand_mwh", "forecast_mwh", "interchange_mwh")
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        results.append(CheckResult("required_sources", False, "FAIL", f"Missing required columns: {missing}"))
+    else:
+        nulls = {c: int(df[c].isna().sum()) for c in required if df[c].isna().any()}
+        results.append(CheckResult("required_sources", not nulls, "FAIL" if nulls else "INFO",
+                                   f"Null mandatory observations: {nulls}" if nulls else "All required observations present"))
+
 
     # ------------------------------------------------------------------
     # 0. Ensure timestamp_utc is datetime — all subsequent checks depend on it
