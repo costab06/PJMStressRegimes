@@ -139,3 +139,24 @@ it does **not** verify baseline sampling eligibility, source revisions, or
 that the stated approval actually occurred. Those remain research governance
 requirements. The bridge and feature worker also check baseline hashes per
 cycle to detect changes after startup.
+
+
+## EIA snapshot provenance
+
+Each successful EIA-930 acquisition now writes a deterministic
+`eia930-<sha256>.provenance.json` sidecar beside its content-addressed CSV.
+The sidecar records the UTC window, balancing authority, artifact hash,
+row count, and explicit `publication_time_verified: false` and
+`revision_history_verified: false` flags. Identical retrievals reuse the
+same sidecar; an existing sidecar with different bytes fails closed.
+
+This is **snapshot identity**, not proof of historical point-in-time
+availability. A later retrieval may return revised values for the same
+observation window, producing a different hash. The pipeline still needs
+source-native release/revision timestamps, a revision comparison ledger, and
+point-in-time availability eligibility before historical predictive claims.
+
+The Redis recovery integration test now additionally runs a replacement
+consumer through `BaseAgent.run()` and asserts a single downstream event
+on replay. This is an in-process worker lifecycle test, not a process-kill,
+network-partition, or Redis failover test.
