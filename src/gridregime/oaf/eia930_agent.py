@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
 from pathlib import Path
 from typing import Callable
@@ -89,7 +90,41 @@ def persist_eia_window(
         finally:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
+    # Deterministic provenance sidecar: the observation snapshot is identifiable,
+    # but EIA publication and revision timestamps have not been established.
+    # Never equate retrieval or observation time with source availability.
+    provenance = {
+        "schema_version": 1,
+        "source": "eia930",
+        "ba": ba,
+        "window_start_utc": t0.isoformat(),
+        "window_end_utc": t1.isoformat(),
+        "artifact_sha256": digest,
+        "row_count": len(frame),
+        "publication_time_verified": False,
+        "revision_history_verified": False,
+    }
+    sidecar = output_dir / f"eia930-{digest}.provenance.json"
+    encoded = (json.dumps(provenance, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+    if sidecar.exists():
+        if sidecar.read_bytes() != encoded:
+            raise ValueError("Existing EIA provenance sidecar differs from snapshot")
+    else:
+        import tempfile
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", dir=output_dir,
+                                             prefix=".eia930-provenance-", delete=False) as temp:
+                temp.write(encoded)
+                temp_path = Path(temp.name)
+            os.replace(temp_path, sidecar)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
     return {
+        "provenance_path": str(sidecar),
+        "publication_time_verified": False,
+        "revision_history_verified": False,
         "ba": ba,
         "start": start,
         "end": end,
