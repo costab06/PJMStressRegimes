@@ -54,7 +54,7 @@ class FeatureDataset:
         object.__setattr__(self, "frame", self.frame.copy(deep=True))
 
     def matrix(self) -> pd.DataFrame:
-        return self.frame.loc[:, FROZEN_FEATURES].copy()
+        return self.frame.loc[:, list(FROZEN_FEATURES)].copy()
 
 
 @dataclass(frozen=True)
