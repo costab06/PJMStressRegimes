@@ -160,3 +160,31 @@ The Redis recovery integration test now additionally runs a replacement
 consumer through `BaseAgent.run()` and asserts a single downstream event
 on replay. This is an in-process worker lifecycle test, not a process-kill,
 network-partition, or Redis failover test.
+
+
+## EIA revision ledger and causal eligibility
+
+The EIA acquisition adapter now records each distinct content SHA-256 for an
+observation window in `eia930/revisions/<window-id>/<sha256>.json`. Records
+are append-only, retaining the first time our collector observed a version.
+Repeated retrieval of the same bytes does not replace that timestamp. A
+revised window produces a second record rather than rewriting the first.
+
+`assert_point_in_time_eligible(record, decision_as_of)` rejects records
+without verified upstream publication and revision history, or published after
+the decision timestamp. **No currently collected EIA record passes this gate**:
+the EIA source does not yet provide independently verified publication/revision
+timestamps. Collector retrieval timestamps are not treated as source timestamps.
+
+The Redis-backed acquisition-to-feature integration test now verifies that a
+revision record is created and that predictive point-in-time eligibility fails
+closed while the descriptive frozen-v1 feature computation remains available.
+
+### Merge gate
+
+The infrastructure PR must not be merged until CI passes on its final HEAD,
+worker lifecycle and complete-cycle tests are green, and the remaining source
+publication/revision limitations are explicitly accepted as non-predictive
+research restrictions. A verified point-in-time historical inference pipeline
+requires separate upstream evidence and cannot be declared complete merely by
+passing these tests.
