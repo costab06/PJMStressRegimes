@@ -17,6 +17,7 @@ from shared.agent.base import BaseAgent
 from shared.eventbus.events import EventEnvelope
 
 from gridregime.ingest.eia930 import fetch_window
+from gridregime.oaf.eia_revision_ledger import record_snapshot
 
 REQUESTED = "grid.eia930.requested"
 FETCHED = "grid.eia930.fetched"
@@ -121,7 +122,13 @@ def persist_eia_window(
         finally:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
+    revision = record_snapshot(
+        ledger_dir=output_dir / "revisions", ba=ba,
+        start=t0.isoformat(), end=t1.isoformat(), sha256=digest,
+        observed_at=pd.Timestamp.now(tz="UTC").isoformat(),
+    )
     return {
+        "revision_record": revision,
         "provenance_path": str(sidecar),
         "publication_time_verified": False,
         "revision_history_verified": False,
