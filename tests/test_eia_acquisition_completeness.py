@@ -46,20 +46,29 @@ def test_coverage_requires_all_three_columns():
 def test_isolated_sentinel_interpolated_with_audit():
     from gridregime.pipeline.milestone_1a import clean_isolated_sentinels
     raw = month().iloc[:5].copy().reset_index(drop=True)
-    raw.loc[2, "demand_mwh"] = 99999
+    raw.loc[2, "demand_mwh"] = -99999
     raw.loc[1, "demand_mwh"] = 94767
     raw.loc[3, "demand_mwh"] = 104129
     clean = clean_isolated_sentinels(raw)
     assert clean.loc[2, "demand_mwh"] == 99448
     assert bool(clean.loc[2, "demand_mwh_imputed"])
-    assert clean.loc[2, "demand_mwh_source_value"] == 99999
-    assert raw.loc[2, "demand_mwh"] == 99999
+    assert clean.loc[2, "demand_mwh_source_value"] == -99999
+    assert raw.loc[2, "demand_mwh"] == -99999
 
 
 def test_adjacent_sentinels_are_not_interpolated():
     from gridregime.pipeline.milestone_1a import clean_isolated_sentinels
     raw = month().iloc[:5].copy().reset_index(drop=True)
-    raw.loc[[2, 3], "demand_mwh"] = 99999
+    raw.loc[[2, 3], "demand_mwh"] = -99999
     clean = clean_isolated_sentinels(raw)
     assert clean.loc[[2, 3], "demand_mwh"].isna().all()
     assert has_failures(validate(clean, "TEST"))
+
+
+def test_plausible_99999_demand_preserved():
+    from gridregime.pipeline.milestone_1a import clean_isolated_sentinels
+    raw = month().iloc[:5].copy().reset_index(drop=True)
+    raw.loc[2, "demand_mwh"] = 99999
+    cleaned = clean_isolated_sentinels(raw)
+    assert cleaned.loc[2, "demand_mwh"] == 99999
+    assert not has_failures(validate(cleaned, "TEST"))
