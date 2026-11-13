@@ -134,11 +134,12 @@ def compute_coverage(df: pd.DataFrame, event: pd.Series) -> dict:
     # Weather hours will be filled in by the NOAA ingest step (future)
     weather_h = 0
 
-    # N_observed_unique: hours present in the data for all three core columns
-    core_cols = [c for c in ["demand_mwh", "forecast_mwh", "interchange_mwh"]
-                 if c in df.columns]
-    if core_cols and "timestamp_utc" in df.columns:
-        n_observed = int(df.dropna(subset=core_cols)["timestamp_utc"].nunique())
+    # Count only hours with every required frozen-v1 source available.
+    required = ["demand_mwh", "forecast_mwh", "interchange_mwh"]
+    if all(c in df.columns for c in required) and "timestamp_utc" in df:
+        observed = df.dropna(subset=required)
+        observed = observed[observed["timestamp_utc"].isin(expected_index)]
+        n_observed = int(observed["timestamp_utc"].nunique())
     else:
         n_observed = 0
     missing_pct = round(100 * (1 - n_observed / max(expected_hours, 1)), 1)
@@ -220,6 +221,9 @@ def run(
             continue
         except Exception as exc:
             print(f"  ERROR fetching data: {exc}")
+            any_validation_failure = True
+            if halt_on_fail:
+                raise RuntimeError("Acquisition failed for " + str(event["event_id"])) from exc
             continue
 
         # ------------------------------------------------------------------
