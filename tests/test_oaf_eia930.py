@@ -154,3 +154,25 @@ def test_unexpected_balancing_authority_rejected(tmp_path):
             ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
             output_dir=tmp_path, fetcher=fetcher,
         )
+
+
+
+def test_eia_snapshot_provenance_is_pinned_and_fail_closed(tmp_path):
+    import json
+    from pathlib import Path
+
+    args = dict(
+        ba="PJM", start="2022-12-20T00", end="2022-12-20T01",
+        output_dir=tmp_path, fetcher=lambda *a: sample_frame(),
+    )
+    first = persist_eia_window(**args)
+    record = json.loads(Path(first["provenance_path"]).read_text())
+    assert record["artifact_sha256"] == first["sha256"]
+    assert record["row_count"] == first["row_count"]
+    assert record["publication_time_verified"] is False
+    assert record["revision_history_verified"] is False
+    assert persist_eia_window(**args) == first
+
+    Path(first["provenance_path"]).write_text('{"tampered":true}')
+    with pytest.raises(ValueError, match="provenance sidecar"):
+        persist_eia_window(**args)
