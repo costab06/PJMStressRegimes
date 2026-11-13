@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-import math
+import numpy as np
 import pandas as pd
 
 FROZEN_FEATURES = ("load_z", "fe_z", "ramp3_z", "ic_z")
@@ -46,8 +46,8 @@ class FeatureDataset:
             raise ValueError("Observations must be aligned to UTC hours")
         if len(times) > 1 and not (times.diff().iloc[1:] == pd.Timedelta(hours=1)).all():
             raise ValueError("Sequence must contain contiguous hourly observations")
-        numeric = self.frame.loc[:, FROZEN_FEATURES].apply(pd.to_numeric, errors="raise")
-        if not numeric.notna().all().all() or not __import__("numpy").isfinite(numeric.to_numpy()).all():
+        numeric = self.frame.loc[:, list(FROZEN_FEATURES)].apply(pd.to_numeric, errors="raise")
+        if not numeric.notna().all().all() or not np.isfinite(numeric.to_numpy()).all():
             raise ValueError("Features must be finite and non-null")
         if "ba" in self.frame and not self.frame["ba"].eq(self.ba).all():
             raise ValueError("Frame balancing authority mismatch")
