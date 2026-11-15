@@ -24,7 +24,7 @@ Output: `results/demo/case_study.json`. This local example needs no network, Red
 
 ## Local-model intelligence layer
 
-The intelligence example adds deterministic comparisons and a **local Ollama interpretation**.
+The intelligence example adds deterministic comparisons and a **local Ollama interpretation**, followed by a model-selected, bounded hypothesis investigation and reassessment.
 It evaluates forecast accuracy under high versus ordinary demand, signed forecast bias,
 the largest contiguous hourly ramp, and the descriptive association between ramps and
 interchange. The model receives only these computed observations and must cite their
@@ -39,7 +39,12 @@ python -m gridregime.grid_interpretation_agent --model qwen3:8b
 ```
 
 Outputs: `results/demo/grid_evidence.json`, `grid_interpretation.json`,
-and the readable `grid_interpretation.md`. Use `--base-url` to change the
+`grid_investigation.json`, and the readable `grid_interpretation.md`.
+The model chooses between predefined forecast-accuracy and ramp/interchange
+investigations. Python calculates the follow-up comparisons; the model then
+reassesses its hypothesis using those measurements. It cannot run arbitrary tools.
+The investigation checks MWh versus percentage errors and within-UTC-hour
+comparisons, or demand-ramp versus interchange-change correlation. Use `--base-url` to change the
 OpenAI-compatible local endpoint.
 
 The interpretation validator rejects missing/unknown evidence IDs, numeric claims
