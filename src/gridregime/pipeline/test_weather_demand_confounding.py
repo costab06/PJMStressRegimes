@@ -40,14 +40,10 @@ def main():
     allcols=manifest["feature_columns"]
     weather=weather_regimes(WEATHER)
     ref=reference_features().merge(weather,on="timestamp_utc",how="left",validate="one_to_one")
-    # Use raw demand (not demand_z alone) as a transparent baseline.
-    raw=pd.concat([pd.read_parquet(ROOT/f"data/raw/eia930/PJM_2021-{m:02d}.parquet")
-                   for m in range(1,13)],ignore_index=True)
-    raw["timestamp_utc"]=pd.to_datetime(raw["timestamp_utc"],utc=True)
-    raw=raw[["timestamp_utc","demand_mwh"]]
-    if raw["timestamp_utc"].duplicated().any():
-        raise ValueError("Duplicate reference demand hours")
-    ref=ref.merge(raw,on="timestamp_utc",how="left",validate="one_to_one")
+    # reference_features() retains the raw demand_mwh column; do not merge it
+    # again or pandas will suffix the duplicate column names.
+    if "demand_mwh" not in ref.columns:
+        raise ValueError("reference_features() missing demand_mwh")
     # Existing event scores are preserved; attach weather and demand from
     # available monthly historical EIA data, not from event names.
     event_months=set((t.year,t.month) for t in events["timestamp_utc"])
