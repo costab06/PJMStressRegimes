@@ -166,8 +166,9 @@ def main():
             for regime in REGIMES:
                 mask=f["weather_regime"].eq(regime).fillna(False)
                 if not mask.any():continue
-                _,flags=predict(f.loc[mask],cols,trained[(regime,name)])
+                scores,flags=predict(f.loc[mask],cols,trained[(regime,name)])
                 f.loc[mask,name]=flags.astype("boolean")
+                f.loc[mask,name+"_score"]=scores
         # Complete-case comparison: same observed hours for both models.
         f=f.dropna(subset=list(MODELS)).copy()
         for name in MODELS:
@@ -176,7 +177,7 @@ def main():
                 rows.append({"episode_id":f["episode_id"].iloc[0],
                              "sample":f["sample"].iloc[0],"model":name,**m})
         hourly.append(f[["episode_id","sample","timestamp_utc","lead",
-                         "weather_regime",*MODELS]])
+                         "weather_regime",*MODELS,*(name+"_score" for name in MODELS)]])
     result=pd.DataFrame(rows)
     result.to_csv(OUT/"window_metrics.csv",index=False)
     pd.concat(hourly,ignore_index=True).to_csv(OUT/"hourly_comparison.csv",index=False)
