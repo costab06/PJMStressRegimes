@@ -22,6 +22,32 @@ python -m gridregime.demo
 
 Output: `results/demo/case_study.json`. This local example needs no network, Redis, or machine-learning dependencies.
 
+## Local-model intelligence layer
+
+The intelligence example adds deterministic comparisons and a **local Ollama interpretation**.
+It evaluates forecast accuracy under high versus ordinary demand, signed forecast bias,
+the largest contiguous hourly ramp, and the descriptive association between ramps and
+interchange. The model receives only these computed observations and must cite their
+evidence IDs, identify alternative explanations, and name missing evidence.
+
+```bash
+# Start Ollama separately and ensure the chosen model is available.
+ollama pull qwen3:8b
+pip install -e ../OpenAgentFabric
+python -m gridregime.grid_intelligence
+python -m gridregime.grid_interpretation_agent --model qwen3:8b
+```
+
+Outputs: `results/demo/grid_evidence.json`, `grid_interpretation.json`,
+and the readable `grid_interpretation.md`. Use `--base-url` to change the
+OpenAI-compatible local endpoint.
+
+The interpretation validator rejects missing/unknown evidence IDs, numeric claims
+invented by the model, and some overconfident causal language. **This is a limited
+structural guardrail, not semantic verification**: a human should still review the
+model's qualitative interpretations. Failed validation stops report generation;
+there is no silent fallback to an unsupported answer.
+
 ## The real OpenAgentFabric integration
 
 The second walkthrough shows the **actual OAF BaseAgent adapters and EventEnvelope contracts**, not a hypothetical architecture:
