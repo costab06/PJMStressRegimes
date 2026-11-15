@@ -1,39 +1,65 @@
-# GridRegime: A Small Cross-Domain Architecture Example
+# GridRegime — A Cross-Domain Architecture Example
 
-This repository began as a research project investigating operational stress in the PJM electricity grid. The reader-facing demonstration is now deliberately much smaller.
+A small, reproducible example of how the same application architecture can be applied to **financial intelligence** and **electric-grid measurements**.
 
-**Purpose:** Show how a familiar analytical workflow—acquire, validate, transform, analyze, and preserve evidence—can be applied to power-grid measurements as well as to financial intelligence.
+This is **not** a grid-emergency predictor. The earlier detector research did not demonstrate an advantage over a simpler weather-and-demand model. The research is preserved on the `modeling/01-core-contracts-and-adapters` branch.
 
-**Not the purpose:** Predict grid emergencies or claim that an anomaly detector outperforms simpler weather-and-demand analysis. Earlier experiments did not establish that result.
+## Start here: four steps
 
-## Run the example
+| Step | What it does | Where |
+| --- | --- | --- |
+| 1. Acquire | Read historical PJM hourly EIA-930 data | `demo.load` |
+| 2. Validate | Check timestamps and measurement contract | `demo.validate` |
+| 3. Analyze | Compute transparent demand and forecast-error statistics | `demo.analyze` |
+| 4. Preserve | Write an auditable JSON result | `demo.main` |
 
-Install the package and its dependencies, and provide the existing local EIA-930 file at `data/raw/eia930/PJM_2026-07.parquet`.
+Run with an existing July 2026 EIA-930 parquet at `data/raw/eia930/PJM_2026-07.parquet`:
 
 ```bash
 pip install -e .
 python -m gridregime.demo
 ```
 
-The script writes `results/demo/case_study.json`, containing its input path, data contract, method, and descriptive measurements. It does not train a model or require weather downloads.
+Output: `results/demo/case_study.json`. This local example needs no network, Redis, or machine-learning dependencies.
 
-## Read the code in five minutes
+## The real OpenAgentFabric integration
 
-The entire reader-facing workflow is in [`src/gridregime/demo.py`](src/gridregime/demo.py):
+The second walkthrough shows the **actual OAF BaseAgent adapters and EventEnvelope contracts**, not a hypothetical architecture:
 
-1. `load` — read the existing hourly EIA-930 dataset
-2. `validate` — check schema, timestamps, and plausible demand
-3. `analyze` — calculate peak demand, hourly changes, and forecast error
-4. `main` — save a reproducible result with source and method information
+```bash
+# Install the sibling OpenAgentFabric project first (or place its framework on PYTHONPATH).
+pip install -e ../OpenAgentFabric
+python -m gridregime.oaf_demo
+```
 
-## Relationship to InvestmentIntelligence and OpenAgentFabric
+The walkthrough calls existing OAF agent handlers in-process:
 
-Both financial and grid analysis need input contracts, deterministic transformations, execution coordination, and evidence records. Their domain-specific sources and analytical methods differ.
+```text
+grid.acquisition.cycle.requested
+          |
+          v
+AcquisitionCoordinatorAgent (OAF BaseAgent)
+          |
+          v
+grid.eia930.requested
+          |
+          v
+EIA930AcquisitionAgent (OAF BaseAgent)
+          |
+          v
+grid.eia930.fetched --> content-addressed CSV + provenance + revision record
+```
 
-**Important distinction:** This demonstration illustrates architectural portability. It does **not** currently prove that this repository imports or executes OpenAgentFabric. That integration should only be claimed after it is verified in code.
+Output: `results/demo/oaf_event_trace.json`, plus a hash-named data artifact. Correlation and causation identifiers are carried across events. The EIA acquisition adapter also checks coverage and preserves source evidence.
 
-## Research history
+**Scope boundary:** This is a handler-level demonstration. It does not start Redis, exercise durable retries, prove publication-time availability, or demonstrate live production scheduling. Those capabilities belong to the wider OpenAgentFabric runtime, not this short walkthrough.
 
-The prior modeling work is preserved on the `modeling/01-core-contracts-and-adapters` branch. It includes anomaly models, weather/demand comparisons, calibration experiments, and their limitations. Those are not necessary to understand this example.
+## Why this belongs beside InvestmentIntelligence
 
-This demonstration is maintained separately on `demo/architecture-case-study` so the research history remains intact while the audience-facing presentation can be simplified.
+InvestmentIntelligence uses domain-specific financial retrieval and interpretation; GridRegime uses hourly grid observations. Both can be organized around event-driven acquisition, explicit data contracts, traceable transformations, and durable evidence. The OAF adapters in this repository are actual implementations of that pattern.
+
+The article's claim is **architectural portability**, not predictive performance.
+
+## Where the experiments went
+
+All experimental modeling, threshold sweeps, notebooks, historical catalogs, and manuscript material remain in the full research history on `modeling/01-core-contracts-and-adapters`. This branch deliberately contains only the reader-facing example and its essential adapters.
