@@ -163,6 +163,9 @@ def main():
         f=f.copy()
         for name,cols in (("weather_demand",BASELINE_COLS),("full_gridregime",fullcols)):
             f[name]=pd.Series(np.nan,index=f.index,dtype="boolean")
+            # Always create the score column, including when no weather regime
+            # has usable coverage in this window.
+            f[name+"_score"]=np.nan
             for regime in REGIMES:
                 mask=f["weather_regime"].eq(regime).fillna(False)
                 if not mask.any():continue
@@ -170,7 +173,12 @@ def main():
                 f.loc[mask,name]=flags.astype("boolean")
                 f.loc[mask,name+"_score"]=scores
         # Complete-case comparison: same observed hours for both models.
-        f=f.dropna(subset=list(MODELS)).copy()
+        window_id=f["episode_id"].iloc[0]
+        f=f.dropna(subset=[*(MODELS),*(name+"_score" for name in MODELS)]).copy()
+        if f.empty:
+            missing.append({"episode_id":window_id,
+                            "reason":"no complete scores for both models"})
+            continue
         for name in MODELS:
             m=window_metrics(f,name)
             if m:
