@@ -170,7 +170,7 @@ def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
              "**Additional data needed:** " + followup["next_data_needed"], "",
              "The follow-up text is model-generated and requires human review; "
              "the numerical investigation is deterministic.", ""]
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 async def main() -> None:
@@ -188,7 +188,7 @@ async def main() -> None:
     hypothesis, investigation, followup = await investigate_with_model(frame, evidence, args.model, args.base_url)
     (OUTPUT / "grid_investigation.json").write_text(json.dumps({
         "hypothesis": hypothesis, "investigation": investigation, "followup": followup
-    }, indent=2) + "\\n", encoding="utf-8")
+    }, indent=2) + "\n", encoding="utf-8")
     target.write_text(render_report(evidence, interpretation, args.model)
                       + render_investigation(hypothesis, investigation, followup), encoding="utf-8")
     print(target.read_text())
