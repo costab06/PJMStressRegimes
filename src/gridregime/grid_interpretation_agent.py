@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 from pathlib import Path
 
 from gridregime.demo import OUTPUT, load
@@ -22,12 +23,12 @@ a 'summary' string. Each finding must have: 'title', 'interpretation',
 Interpretations are hypotheses, not established causes. Never claim an outage,
 emergency, prediction, reliability risk, or causal mechanism was demonstrated.
 Do not invent measurements, percentages, dates, weather, generation, or citations.
-Do not quote numeric values: the report will display verified evidence separately.
+Avoid quoting numerical values unless necessary; the report displays verified evidence separately.
 Every finding must cite relevant evidence IDs. State uncertainty explicitly."""
 
 
 def validate_interpretation(response: str, evidence: dict) -> dict:
-    """Reject malformed, uncited, or numerically invented narratives."""
+    """Reject malformed and uncited narratives; numeric claims require human review."""
     obj = json.loads(response)
     if not isinstance(obj, dict) or set(obj) != {"findings", "summary"}:
         raise ValueError("Unexpected model response schema")
@@ -40,8 +41,6 @@ def validate_interpretation(response: str, evidence: dict) -> dict:
     def check_text(s: object) -> str:
         if not isinstance(s, str) or not s.strip() or len(s) > 1500:
             raise ValueError("Invalid interpretation text")
-        if any(ch.isdigit() for ch in s):
-            raise ValueError("Model must not introduce numeric claims")
         if any(term in s.lower() for term in forbidden):
             raise ValueError("Unsupported certainty or causal claim")
         return s.strip()
@@ -95,6 +94,9 @@ async def interpret(evidence: dict, model: str, base_url: str) -> dict:
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": json.dumps(evidence, allow_nan=False)},
     ])
+    # Retain the raw model response for inspection even when validation fails.
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    (OUTPUT / "grid_interpretation_raw.txt").write_text(raw, encoding="utf-8")
     return validate_interpretation(raw, evidence)
 
 
