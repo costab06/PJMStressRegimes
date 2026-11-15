@@ -40,6 +40,13 @@ def valid_response():
             }]}
 
 
+def test_allows_digits_in_interpretation():
+    e = build_evidence(sample())
+    response = valid_response()
+    response["findings"][0]["interpretation"] = "Evidence E2 suggests a difference across the 90th percentile grouping, but does not establish why."
+    assert validate_interpretation(json.dumps(response), e)["findings"][0]["evidence_ids"] == ["E1", "E2"]
+
+
 def test_report_and_contract():
     e = build_evidence(sample())
     response = validate_interpretation(json.dumps(valid_response()), e)
@@ -49,7 +56,7 @@ def test_report_and_contract():
 
 @pytest.mark.parametrize("mutation", [
     lambda d: d["findings"][0].update(evidence_ids=["E99"]),
-    lambda d: d["findings"][0].update(interpretation="The outage was caused by 30% growth"),
+    lambda d: d["findings"][0].update(interpretation="The outage was caused by growth"),
     lambda d: d.update(summary="This proves the grid was unsafe"),
 ])
 def test_rejects_unsupported_claims(mutation):
