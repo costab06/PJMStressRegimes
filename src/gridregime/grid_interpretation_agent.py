@@ -14,6 +14,7 @@ from pathlib import Path
 
 from gridregime.demo import OUTPUT, load
 from gridregime.grid_intelligence import build_evidence
+from gridregime.grid_investigation import QUESTIONS, investigate
 
 SYSTEM = """You are a cautious electrical-grid research analyst. Interpret ONLY the supplied
 deterministic observations. Return a JSON object with exactly a 'findings' array and
@@ -100,18 +101,96 @@ async def interpret(evidence: dict, model: str, base_url: str) -> dict:
     return validate_interpretation(raw, evidence)
 
 
+HYPOTHESIS_SYSTEM = """You are choosing one useful follow-up investigation of historical grid
+measurements. Return JSON with exactly two fields: 'question' and 'reason'.
+'question' must be either 'forecast_accuracy' or 'ramp_interchange'.
+Choose based only on the evidence. Do not make causal or emergency claims.
+The investigation is performed by deterministic code, not by you."""
+
+FOLLOWUP_SYSTEM = """You are an evidence-constrained grid analyst. You have the original
+observations, a hypothesis selected earlier, and new deterministic investigation results.
+Return JSON with exactly 'assessment', 'supporting_evidence', 'remaining_uncertainty',
+and 'next_data_needed' (all nonempty strings). Discuss whether the initial hypothesis
+survives the follow-up; distinguish overall from within-hour comparisons and percentage
+from absolute MWh error. No causal, emergency, or predictive conclusions. Do not invent
+numbers or facts. State if matching is unavailable or inconclusive."""
+
+
+def validate_hypothesis(raw: str) -> dict:
+    obj = json.loads(raw)
+    if not isinstance(obj, dict) or set(obj) != {"question", "reason"}:
+        raise ValueError("Invalid hypothesis selection")
+    if obj["question"] not in QUESTIONS or not isinstance(obj["reason"], str) or not obj["reason"].strip():
+        raise ValueError("Unsupported or unexplained hypothesis")
+    return obj
+
+
+def validate_followup(raw: str) -> dict:
+    obj = json.loads(raw)
+    fields = {"assessment", "supporting_evidence", "remaining_uncertainty", "next_data_needed"}
+    if not isinstance(obj, dict) or set(obj) != fields:
+        raise ValueError("Invalid follow-up schema")
+    if any(not isinstance(obj[k], str) or not obj[k].strip() for k in fields):
+        raise ValueError("Empty follow-up field")
+    return obj
+
+
+async def investigate_with_model(frame, evidence: dict, model: str, base_url: str) -> tuple[dict, dict, dict]:
+    """Model selects a bounded tool; deterministic code investigates; model reassesses."""
+    from shared.llm.client import LLMClient, LLMConfig
+    client = LLMClient(LLMConfig(model=model, base_url=base_url, temperature=0))
+    raw_choice = await client.complete([
+        {"role": "system", "content": HYPOTHESIS_SYSTEM},
+        {"role": "user", "content": json.dumps({"questions": QUESTIONS, "evidence": evidence}, allow_nan=False)},
+    ])
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    (OUTPUT / "grid_hypothesis_raw.txt").write_text(raw_choice, encoding="utf-8")
+    hypothesis = validate_hypothesis(raw_choice)
+    result = investigate(frame, hypothesis["question"])
+    raw_followup = await client.complete([
+        {"role": "system", "content": FOLLOWUP_SYSTEM},
+        {"role": "user", "content": json.dumps({
+            "original_evidence": evidence, "hypothesis": hypothesis, "investigation": result
+        }, allow_nan=False)},
+    ])
+    (OUTPUT / "grid_followup_raw.txt").write_text(raw_followup, encoding="utf-8")
+    return hypothesis, result, validate_followup(raw_followup)
+
+
+def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
+    lines = ["", "## Hypothesis and follow-up investigation", "",
+             "**Question selected by local model:** " + QUESTIONS[hypothesis["question"]], "",
+             "**Why investigate:** " + hypothesis["reason"], "",
+             "**Deterministic method:** " + result["method"], "",
+             "**Computed follow-up evidence:**", "", "```json",
+             json.dumps(result, indent=2), "```", "",
+             "**Reassessment:** " + followup["assessment"], "",
+             "**Evidence interpretation:** " + followup["supporting_evidence"], "",
+             "**Remaining uncertainty:** " + followup["remaining_uncertainty"], "",
+             "**Additional data needed:** " + followup["next_data_needed"], "",
+             "The follow-up text is model-generated and requires human review; "
+             "the numerical investigation is deterministic.", ""]
+    return "\\n".join(lines)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="qwen3:8b")
     parser.add_argument("--base-url", default="http://localhost:11434/v1")
     args = parser.parse_args()
-    evidence = build_evidence(load())
+    frame = load()
+    evidence = build_evidence(frame)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "grid_evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
     interpretation = await interpret(evidence, args.model, args.base_url)
     (OUTPUT / "grid_interpretation.json").write_text(json.dumps(interpretation, indent=2) + "\n")
     target = OUTPUT / "grid_interpretation.md"
-    target.write_text(render_report(evidence, interpretation, args.model), encoding="utf-8")
+    hypothesis, investigation, followup = await investigate_with_model(frame, evidence, args.model, args.base_url)
+    (OUTPUT / "grid_investigation.json").write_text(json.dumps({
+        "hypothesis": hypothesis, "investigation": investigation, "followup": followup
+    }, indent=2) + "\\n", encoding="utf-8")
+    target.write_text(render_report(evidence, interpretation, args.model)
+                      + render_investigation(hypothesis, investigation, followup), encoding="utf-8")
     print(target.read_text())
     print(f"Saved {target}")
 
