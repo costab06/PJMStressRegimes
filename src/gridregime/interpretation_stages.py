@@ -51,10 +51,7 @@ def verify_numerical_assertion(assertion: dict, ids: list[str],
             reasons.append("invalid_compound_assertion")
         else:
             for part in parts:
-                subclaim = dict(claim, assertion=part, text="Numeric subassertion")
-                subaudit = verify_claim(subclaim, evidence)
-                if subaudit["status"] == "rejected":
-                    reasons.extend(subaudit["issues"])
+                reasons.extend(verify_numerical_assertion(part, ids, evidence))
     elif assertion["kind"] == "comparison":
         left, right, op = assertion.get("left"), assertion.get("right"), assertion.get("operator")
         if op not in COMPARISONS or left not in ids or right not in ids or left == right:
