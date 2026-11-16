@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from gridregime.interpretation_verification import audit_interpretation
+from gridregime.interpretation_semantic_review import review_audit
 
 DEMO_EVIDENCE = [
     {"id": "E_PCT_HIGH", "metric": "mae_percent", "value": 3.3846,
@@ -88,7 +89,8 @@ def query_ollama(evidence: list[dict], *, model: str = "qwen3:8b",
 
 def run_experiment(output_dir: Path, *, model: str = "qwen3:8b",
                    raw_response: str | None = None,
-                   evidence: list[dict] | None = None) -> dict:
+                   evidence: list[dict] | None = None,
+                   semantic_review: bool = False, reviewer=None) -> dict:
     """Persist raw response and audit; never publish unreviewed prose."""
     output_dir.mkdir(parents=True, exist_ok=True)
     records = evidence if evidence is not None else DEMO_EVIDENCE
@@ -97,11 +99,22 @@ def run_experiment(output_dir: Path, *, model: str = "qwen3:8b",
     parsed = parse_model_output(raw)
     document = {"evidence": records, "claims": parsed["claims"]}
     audit = audit_interpretation(document)
+    if semantic_review:
+        audit = review_audit(audit, model=model, reviewer=reviewer)
     (output_dir / "claim_audit.json").write_text(
         json.dumps(audit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     counts = {s: sum(a["status"] == s for a in audit["audits"])
               for s in ("rejected", "review_required")}
+    semantic_counts = {}
+    if semantic_review:
+        semantic_counts = {
+            verdict: sum(a.get("semantic_review", {}).get("verdict") == verdict
+                         for a in audit["audits"])
+            for verdict in ("supported", "unsupported", "uncertain", "not_run", "error")
+        }
     report = {
+        "semantic_review_enabled": semantic_review,
+        "semantic_counts": semantic_counts,
         "model": model, "claims": len(audit["audits"]),
         "counts": counts, "published": len(audit["publication"]),
         "warning": "Numerical consistency does not establish prose entailment. "
@@ -117,8 +130,11 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path,
                         default=Path("results/interpretation-live"))
     parser.add_argument("--model", default="qwen3:8b")
+    parser.add_argument("--semantic-review", action="store_true",
+                        help="Run a second advisory Ollama pass; never auto-publishes")
     args = parser.parse_args()
-    print(json.dumps(run_experiment(args.output_dir, model=args.model), indent=2))
+    print(json.dumps(run_experiment(args.output_dir, model=args.model,
+                                    semantic_review=args.semantic_review), indent=2))
 
 
 if __name__ == "__main__":
