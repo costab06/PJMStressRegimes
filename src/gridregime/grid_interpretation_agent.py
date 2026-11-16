@@ -126,23 +126,42 @@ def validate_hypothesis(raw: str) -> dict:
 
 
 def validate_followup(raw: str) -> dict:
+    """Normalize structured evidence for display without asserting its truth."""
     obj = json.loads(raw)
     fields = {"assessment", "supporting_evidence", "remaining_uncertainty", "next_data_needed"}
     if not isinstance(obj, dict) or set(obj) != fields:
         raise ValueError("Invalid follow-up schema")
-    # An unanswered field is an explicit limitation, not a schema failure.
-    # Preserve that fact; never manufacture a model conclusion.
+    incomplete = False
+    structured = []
     for key in fields:
         value = obj[key]
         if value is None or (isinstance(value, str) and not value.strip()):
             obj[key] = "Not provided by local model; requires review."
-        elif not isinstance(value, str):
+            incomplete = True
+        elif isinstance(value, str):
+            continue
+        elif key != "assessment" and isinstance(value, list):
+            # Common Ollama response shape: a list of evidence statements.
+            # Preserve all details as model-generated, not verified evidence.
+            if not value:
+                obj[key] = "Not provided by local model; requires review."
+                incomplete = True
+            elif all(isinstance(item, str) and item.strip() for item in value):
+                obj[key] = "; ".join(value)
+                structured.append(key)
+            elif all(isinstance(item, dict) for item in value):
+                obj[key] = json.dumps(value, ensure_ascii=False)
+                structured.append(key)
+            else:
+                raise ValueError(f"Invalid follow-up field type: {key}")
+        elif key != "assessment" and isinstance(value, dict):
+            obj[key] = json.dumps(value, ensure_ascii=False)
+            structured.append(key)
+        else:
             raise ValueError(f"Invalid follow-up field type: {key}")
-    obj["incomplete"] = any(
-        obj[key] == "Not provided by local model; requires review." for key in fields
-    )
+    obj["incomplete"] = incomplete
+    obj["structured_fields"] = sorted(structured)
     return obj
-
 
 async def investigate_with_model(frame, evidence: dict, model: str, base_url: str) -> tuple[dict, dict, dict]:
     """Model selects a bounded tool; deterministic code investigates; model reassesses."""
@@ -179,6 +198,8 @@ def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
              "**Additional data needed:** " + followup["next_data_needed"], "",
              "The follow-up text is model-generated and requires human review; "
              "the numerical investigation is deterministic.", ""]
+    if followup.get("structured_fields"):
+        lines.extend(["", "**Review required:** Structured model output was formatted for display, not independently verified.", ""])
     if followup.get("incomplete"):
         lines.extend(["", "**Review required:** The local model left one or more follow-up fields unanswered.", ""])
     return "\n".join(lines)
