@@ -73,3 +73,28 @@ def test_invalid_followup_type_still_rejected():
     }
     with pytest.raises(ValueError, match="field type"):
         validate_followup(json.dumps(response))
+
+
+def test_structured_supporting_evidence_is_preserved():
+    response = {
+        "assessment": "The hypothesis remains uncertain",
+        "supporting_evidence": [{"metric": "mean_absolute_error", "observation": "lower in high demand"}],
+        "remaining_uncertainty": ["Weather confounding", "Time-of-day effects"],
+        "next_data_needed": {"weather": "temperature"},
+    }
+    result = validate_followup(json.dumps(response))
+    assert result["incomplete"] is False
+    assert result["structured_fields"] == ["next_data_needed", "remaining_uncertainty", "supporting_evidence"]
+    assert "mean_absolute_error" in result["supporting_evidence"]
+    assert "temperature" in result["next_data_needed"]
+
+
+def test_mixed_list_is_rejected():
+    response = {
+        "assessment": "Uncertain",
+        "supporting_evidence": ["statement", 7],
+        "remaining_uncertainty": "Confounding",
+        "next_data_needed": "Weather",
+    }
+    with pytest.raises(ValueError, match="field type"):
+        validate_followup(json.dumps(response))
