@@ -1,0 +1,154 @@
+"""Conservative claim-level publication gate inspired by InvestmentIntelligence.
+
+The verifier checks typed assertions, not arbitrary prose entailment.
+Unverifiable claims are withheld, never silently promoted to verified.
+"""
+from __future__ import annotations
+
+from copy import deepcopy
+from decimal import Decimal, InvalidOperation
+from typing import Any
+
+VALID_TYPES = {"observed_fact", "interpretation", "prediction"}
+VALID_ROLES = {"establishes_fact", "supports_inference", "context_only"}
+COMPARISONS = {"gt", "lt", "eq"}
+TOLERANCE = Decimal("0.000001")
+
+
+def _number(value: Any) -> Decimal:
+    if isinstance(value, bool) or value is None:
+        raise ValueError("invalid_numeric_value")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise ValueError("invalid_numeric_value") from None
+    if not number.is_finite():
+        raise ValueError("invalid_numeric_value")
+    return number
+
+
+def _compare(a: Decimal, b: Decimal, operator: str) -> bool:
+    delta = a - b
+    tolerance = max(TOLERANCE, max(abs(a), abs(b)) * Decimal("0.00000001"))
+    if operator == "gt":
+        return delta > tolerance
+    if operator == "lt":
+        return delta < -tolerance
+    if operator == "eq":
+        return abs(delta) <= tolerance
+    return False
+
+
+def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
+    """Return a deterministic disposition with machine-readable reasons."""
+    reasons: list[str] = []
+    cid = claim.get("id")
+    kind = claim.get("type")
+    ids = claim.get("evidence_ids")
+    roles = claim.get("evidence_roles")
+    if kind not in VALID_TYPES or not isinstance(claim.get("text"), str) or not claim["text"].strip():
+        reasons.append("invalid_claim_schema")
+    if not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids):
+        reasons.append("missing_evidence_ids")
+        ids = []
+    if len(ids) != len(set(ids)):
+        reasons.append("duplicate_evidence_ids")
+    if any(i not in evidence for i in ids):
+        reasons.append("unknown_evidence_id")
+    if not isinstance(roles, dict) or set(roles) != set(ids) or any(
+        r not in VALID_ROLES for r in roles.values()
+    ):
+        reasons.append("invalid_evidence_roles")
+    elif not any(roles[i] == "establishes_fact" for i in ids):
+        reasons.append("no_fact_establishing_evidence")
+
+    assertion = claim.get("assertion")
+    if kind == "prediction":
+        reasons.append("prediction_not_established_by_historical_evidence")
+    if kind == "interpretation":
+        reasons.append("interpretation_requires_independent_review")
+    if not isinstance(assertion, dict) or assertion.get("kind") not in {"comparison", "value"}:
+        reasons.append("missing_typed_assertion")
+    elif assertion["kind"] == "comparison":
+        left, right, op = assertion.get("left"), assertion.get("right"), assertion.get("operator")
+        if op not in COMPARISONS or left not in ids or right not in ids or left == right:
+            reasons.append("invalid_comparison")
+        elif left in evidence and right in evidence:
+            l, r = evidence[left], evidence[right]
+            if l.get("unit") != r.get("unit") or l.get("metric") != r.get("metric"):
+                reasons.append("incompatible_metrics_or_units")
+            elif l.get("population") == r.get("population"):
+                reasons.append("comparison_requires_distinct_populations")
+            else:
+                try:
+                    if not _compare(_number(l["value"]), _number(r["value"]), op):
+                        reasons.append("comparison_contradicted")
+                except (KeyError, ValueError):
+                    reasons.append("invalid_evidence_value")
+    elif assertion["kind"] == "value":
+        eid = assertion.get("evidence_id")
+        if eid not in ids or eid not in evidence:
+            reasons.append("invalid_value_reference")
+        else:
+            fact = evidence[eid]
+            if assertion.get("unit") != fact.get("unit") or assertion.get("metric") != fact.get("metric"):
+                reasons.append("incompatible_metrics_or_units")
+            else:
+                try:
+                    if not _compare(_number(assertion["value"]), _number(fact["value"]), "eq"):
+                        reasons.append("value_contradicted")
+                except (KeyError, ValueError):
+                    reasons.append("invalid_evidence_value")
+    # Numerical consistency is necessary but not sufficient for prose entailment.
+    status = "rejected" if any(x in reasons for x in (
+        "invalid_claim_schema", "missing_evidence_ids", "duplicate_evidence_ids",
+        "unknown_evidence_id", "invalid_evidence_roles", "no_fact_establishing_evidence",
+        "invalid_comparison", "incompatible_metrics_or_units",
+        "comparison_requires_distinct_populations", "comparison_contradicted",
+        "invalid_evidence_value", "invalid_value_reference", "value_contradicted",
+        "missing_typed_assertion",
+    )) else "review_required"
+    return {"id": cid, "status": status, "issues": reasons,
+            "numeric_check": "not_disproven" if status != "rejected" else "failed"}
+
+
+def audit_interpretation(document: dict) -> dict:
+    """Audit without mutating original proposals; fail closed for publication.
+
+    The caller must separately provide reviewed claim IDs to publish text.
+    """
+    original = deepcopy(document)
+    evidence = {}
+    for item in document.get("evidence", []):
+        if isinstance(item, dict) and isinstance(item.get("id"), str):
+            if item["id"] in evidence:
+                raise ValueError("duplicate_evidence_catalog_id")
+            evidence[item["id"]] = item
+    claims = document.get("claims", [])
+    if not isinstance(claims, list):
+        raise ValueError("claims_must_be_list")
+    audits = [verify_claim(c, evidence) for c in claims]
+    return {"source": original, "audits": audits,
+            "publication": [],
+            "status": "requires_independent_claim_review",
+            "note": "A passing numeric check does not prove narrative entailment."}
+
+
+def publish_reviewed(audit: dict, approved_ids: set[str]) -> dict:
+    """Only explicitly approved, non-rejected claims may be rendered."""
+    result = deepcopy(audit)
+    by_id = {a["id"]: a for a in result["audits"]}
+    if len(by_id) != len(result["audits"]):
+        raise ValueError("duplicate_claim_id")
+    unknown = approved_ids - set(by_id)
+    if unknown:
+        raise ValueError("unknown_approved_claim_ids")
+    invalid = [i for i in approved_ids if by_id[i]["status"] == "rejected"]
+    if invalid:
+        raise ValueError("cannot_publish_rejected_claim")
+    result["publication"] = [
+        {"id": c["id"], "text": c["text"], "evidence_ids": c["evidence_ids"]}
+        for c in result["source"]["claims"] if c["id"] in approved_ids
+    ]
+    result["status"] = "reviewed_publication"
+    return result
