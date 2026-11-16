@@ -29,7 +29,9 @@ DEMO_EVIDENCE = [
     {"id": "E_BIAS_OTHER", "metric": "signed_bias_percent", "value": 2.1339,
      "unit": "percent", "population": "other_hours"},
     {"id": "E_CORRELATION", "metric": "pearson_r", "value": -0.1338,
-     "unit": "ratio", "population": "all_hours"},
+     "unit": "ratio", "population": "all_hours",
+     "variables": ["demand_change", "interchange_level"],
+     "description": "Pearson correlation between hourly demand change and interchange level; not forecast versus actual."},
 ]
 
 SYSTEM_PROMPT = """You are interpreting deterministic historical PJM grid measurements.
@@ -39,12 +41,12 @@ text, evidence_ids (list), evidence_roles (map from evidence ID to
 establishes_fact, supports_inference, or context_only), and assertion.
 The assertion is either:
 {"kind":"comparison","left":"E_ID","right":"E_ID","operator":"gt|lt|eq"}
-or {"kind":"value","evidence_id":"E_ID","metric":"metric_name",
+or {"kind":"all","assertions":[two or more comparison/value assertions]}\nor {"kind":"value","evidence_id":"E_ID","metric":"metric_name",
 "unit":"unit","value":number}.
 Use exact evidence metric/unit labels. Do not invent evidence or tests.
 Positive signed_bias_percent means actual exceeded forecast; negative means
 actual was below forecast. Do not infer statistical significance from r alone.
-Only compare matching metrics and units. Include the difference between
+For claims containing two comparisons, use kind=all and assert both.\nThe correlation is between demand change and interchange level, NOT\nforecast and actual demand. Do not misidentify the variables.\nOnly compare matching metrics and units. Include the difference between
 absolute and percentage forecast error. Be explicit about uncertainty.
 A numeric check cannot validate causal interpretations or significance.
 """
