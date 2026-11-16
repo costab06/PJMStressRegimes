@@ -59,8 +59,8 @@ def test_replayed_llm_output_requires_review_and_rejects_numeric_errors(pjm_evid
     assert statuses["C_bias_wrong"]["status"] == "rejected"
     assert statuses["C_pct_correct"]["status"] == "review_required"
     assert statuses["C_abs_correct"]["status"] == "review_required"
-    assert statuses["C_significance"]["status"] == "review_required"
-    assert "interpretation_requires_independent_review" in statuses["C_significance"]["issues"]
+    assert statuses["C_significance"]["status"] == "rejected"
+    assert "significance_requires_statistical_test" in statuses["C_significance"]["issues"]
     assert audit["publication"] == []
     assert llm_output == original
 
