@@ -80,11 +80,11 @@ def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
     # silently cites percentage error (observed in live qwen3:8b run v2).
     # This narrow check does not claim general prose entailment.
     names_absolute_mae = bool(re.search(
-        r"\\b(?:mean absolute error|absolute mean error|absolute (?:forecast )?error|mae)\\b",
+        r"\b(?:mean absolute error|absolute mean error|absolute (?:forecast )?error|mae)\b",
         text_lower,
     ))
     names_percentage_mae = bool(re.search(
-        r"\\b(?:percentage|percent|mape|percentage error)\\b", text_lower
+        r"\b(?:percentage|percent|mape|percentage error)\b", text_lower
     ))
     if names_absolute_mae and not names_percentage_mae:
         referenced_metrics = {
