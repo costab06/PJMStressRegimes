@@ -49,3 +49,27 @@ def test_selection_and_followup_contracts():
 def test_reject_unknown_selection():
     with pytest.raises(ValueError):
         validate_hypothesis(json.dumps({"question": "arbitrary_code", "reason": "No"}))
+
+
+def test_missing_followup_is_marked_incomplete():
+    response = {
+        "assessment": "Insufficient evidence",
+        "supporting_evidence": "",
+        "remaining_uncertainty": None,
+        "next_data_needed": "Weather",
+    }
+    result = validate_followup(json.dumps(response))
+    assert result["incomplete"] is True
+    assert "requires review" in result["supporting_evidence"]
+    assert "requires review" in result["remaining_uncertainty"]
+
+
+def test_invalid_followup_type_still_rejected():
+    response = {
+        "assessment": ["invalid"],
+        "supporting_evidence": "Evidence",
+        "remaining_uncertainty": "Uncertain",
+        "next_data_needed": "Weather",
+    }
+    with pytest.raises(ValueError, match="field type"):
+        validate_followup(json.dumps(response))
