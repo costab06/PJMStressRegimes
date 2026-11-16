@@ -76,6 +76,22 @@ def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
             reasons.append("correlation_variable_mismatch")
     if correlation_ids and re.search(r"statistically significant|not significant|insignificant", text_lower):
         reasons.append("significance_requires_statistical_test")
+    # Catch prose that names absolute error while the structured assertion
+    # silently cites percentage error (observed in live qwen3:8b run v2).
+    # This narrow check does not claim general prose entailment.
+    names_absolute_mae = bool(re.search(
+        r"\\b(?:mean absolute error|absolute mean error|absolute (?:forecast )?error|mae)\\b",
+        text_lower,
+    ))
+    names_percentage_mae = bool(re.search(
+        r"\\b(?:percentage|percent|mape|percentage error)\\b", text_lower
+    ))
+    if names_absolute_mae and not names_percentage_mae:
+        referenced_metrics = {
+            evidence[i].get("metric") for i in ids if i in evidence
+        }
+        if "mae_percent" in referenced_metrics and "mae_absolute" not in referenced_metrics:
+            reasons.append("prose_metric_identity_mismatch")
     # Compound conclusions need a typed assertion for each independent metric.
     compound_mae = ("percentage" in text_lower or "percent" in text_lower) and "absolute" in text_lower and "error" in text_lower
     assertions = assertion.get("assertions") if isinstance(assertion, dict) and assertion.get("kind") == "all" else [assertion]
@@ -146,7 +162,7 @@ def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
         "invalid_evidence_value", "invalid_value_reference", "value_contradicted",
         "missing_typed_assertion", "invalid_compound_assertion",
         "compound_claim_missing_assertions", "correlation_variable_mismatch",
-        "significance_requires_statistical_test",
+        "significance_requires_statistical_test", "prose_metric_identity_mismatch",
     )) else "review_required"
     return {"id": cid, "status": status, "issues": reasons,
             "numeric_check": "not_disproven" if status != "rejected" else "failed"}
