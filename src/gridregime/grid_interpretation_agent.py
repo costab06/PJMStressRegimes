@@ -110,7 +110,7 @@ The investigation is performed by deterministic code, not by you."""
 FOLLOWUP_SYSTEM = """You are an evidence-constrained grid analyst. You have the original
 observations, a hypothesis selected earlier, and new deterministic investigation results.
 Return JSON with exactly 'assessment', 'supporting_evidence', 'remaining_uncertainty',
-and 'next_data_needed' (all nonempty strings). Discuss whether the initial hypothesis
+and 'next_data_needed' (strings or null; use null when evidence is insufficient). Discuss whether the initial hypothesis
 survives the follow-up; distinguish overall from within-hour comparisons and percentage
 from absolute MWh error. No causal, emergency, or predictive conclusions. Do not invent
 numbers or facts. State if matching is unavailable or inconclusive."""
@@ -130,8 +130,17 @@ def validate_followup(raw: str) -> dict:
     fields = {"assessment", "supporting_evidence", "remaining_uncertainty", "next_data_needed"}
     if not isinstance(obj, dict) or set(obj) != fields:
         raise ValueError("Invalid follow-up schema")
-    if any(not isinstance(obj[k], str) or not obj[k].strip() for k in fields):
-        raise ValueError("Empty follow-up field")
+    # An unanswered field is an explicit limitation, not a schema failure.
+    # Preserve that fact; never manufacture a model conclusion.
+    for key in fields:
+        value = obj[key]
+        if value is None or (isinstance(value, str) and not value.strip()):
+            obj[key] = "Not provided by local model; requires review."
+        elif not isinstance(value, str):
+            raise ValueError(f"Invalid follow-up field type: {key}")
+    obj["incomplete"] = any(
+        obj[key] == "Not provided by local model; requires review." for key in fields
+    )
     return obj
 
 
@@ -170,6 +179,8 @@ def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
              "**Additional data needed:** " + followup["next_data_needed"], "",
              "The follow-up text is model-generated and requires human review; "
              "the numerical investigation is deterministic.", ""]
+    if followup.get("incomplete"):
+        lines.extend(["", "**Review required:** The local model left one or more follow-up fields unanswered.", ""])
     return "\n".join(lines)
 
 
