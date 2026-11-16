@@ -15,6 +15,7 @@ from pathlib import Path
 from gridregime.demo import OUTPUT, load
 from gridregime.grid_intelligence import build_evidence
 from gridregime.grid_investigation import QUESTIONS, investigate
+from gridregime.grid_semantic_verifier import verified_comparisons, verify_model_claims, render_verified_comparisons
 
 SYSTEM = """You are a cautious electrical-grid research analyst. Interpret ONLY the supplied
 deterministic observations. Return a JSON object with exactly a 'findings' array and
@@ -113,7 +114,7 @@ Return JSON with exactly 'assessment', 'supporting_evidence', 'remaining_uncerta
 and 'next_data_needed' (strings or null; use null when evidence is insufficient). Discuss whether the initial hypothesis
 survives the follow-up; distinguish overall from within-hour comparisons and percentage
 from absolute MWh error. No causal, emergency, or predictive conclusions. Do not invent
-numbers or facts. State if matching is unavailable or inconclusive."""
+numbers or facts. State if matching is unavailable or inconclusive.\nAlso include 'comparisons' as a JSON object mapping each key from 'comparison_keys'\nin the user input to its correct 'higher', 'lower', 'equal', 'unavailable', or\n'descriptive' direction. Do not invent comparison keys."""
 
 
 def validate_hypothesis(raw: str) -> dict:
@@ -129,8 +130,8 @@ def validate_followup(raw: str) -> dict:
     """Normalize structured evidence for display without asserting its truth."""
     obj = json.loads(raw)
     fields = {"assessment", "supporting_evidence", "remaining_uncertainty", "next_data_needed"}
-    if not isinstance(obj, dict) or set(obj) != fields:
-        raise ValueError("Invalid follow-up schema")
+    if not isinstance(obj, dict) or not fields.issubset(obj) or set(obj) - fields - {"comparisons"}:
+        raise ValueError("Invalid follow-up schema")\n    comparisons = obj.pop("comparisons", None)
     incomplete = False
     structured = []
     for key in fields:
@@ -159,7 +160,7 @@ def validate_followup(raw: str) -> dict:
             structured.append(key)
         else:
             raise ValueError(f"Invalid follow-up field type: {key}")
-    obj["incomplete"] = incomplete
+    obj["comparisons"] = comparisons\n    obj["incomplete"] = incomplete
     obj["structured_fields"] = sorted(structured)
     return obj
 
@@ -175,14 +176,14 @@ async def investigate_with_model(frame, evidence: dict, model: str, base_url: st
     (OUTPUT / "grid_hypothesis_raw.txt").write_text(raw_choice, encoding="utf-8")
     hypothesis = validate_hypothesis(raw_choice)
     result = investigate(frame, hypothesis["question"])
-    raw_followup = await client.complete([
+    truth = verified_comparisons(result)\n    raw_followup = await client.complete([
         {"role": "system", "content": FOLLOWUP_SYSTEM},
         {"role": "user", "content": json.dumps({
-            "original_evidence": evidence, "hypothesis": hypothesis, "investigation": result
+            "original_evidence": evidence, "hypothesis": hypothesis, "investigation": result,\n            "comparison_keys": list(truth)
         }, allow_nan=False)},
     ])
     (OUTPUT / "grid_followup_raw.txt").write_text(raw_followup, encoding="utf-8")
-    return hypothesis, result, validate_followup(raw_followup)
+    followup = validate_followup(raw_followup)\n    followup["verification"] = verify_model_claims(followup["comparisons"], truth)\n    return hypothesis, result, followup
 
 
 def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
@@ -194,10 +195,10 @@ def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
              json.dumps(result, indent=2), "```", "",
              "**Reassessment:** " + followup["assessment"], "",
              "**Evidence interpretation:** " + followup["supporting_evidence"], "",
-             "**Remaining uncertainty:** " + followup["remaining_uncertainty"], "",
+             "**Remaining uncertainty (model-generated):** " + followup["remaining_uncertainty"], "",
              "**Additional data needed:** " + followup["next_data_needed"], "",
              "The follow-up text is model-generated and requires human review; "
-             "the numerical investigation is deterministic.", ""]
+             "the numerical investigation is deterministic.", ""])
     if followup.get("structured_fields"):
         lines.extend(["", "**Review required:** Structured model output was formatted for display, not independently verified.", ""])
     if followup.get("incomplete"):
