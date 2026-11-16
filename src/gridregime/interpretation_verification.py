@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
+import re
 from typing import Any
 
 VALID_TYPES = {"observed_fact", "interpretation", "prediction"}
@@ -63,12 +64,49 @@ def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
         reasons.append("no_fact_establishing_evidence")
 
     assertion = claim.get("assertion")
+    text_lower = claim.get("text", "").lower() if isinstance(claim.get("text"), str) else ""
+    # Domain-specific semantic checks are conservative: flag known contradictions,
+    # never claim to establish general natural-language entailment.
+    correlation_ids = [i for i in ids if i in evidence and evidence[i].get("metric") == "pearson_r"]
+    if correlation_ids and "between" in text_lower:
+        # This metric is specifically demand-change versus interchange-level,
+        # not forecast versus actual. Require both measured concepts.
+        if not (re.search(r"demand\\s+chang", text_lower) and
+                re.search(r"interchange", text_lower)):
+            reasons.append("correlation_variable_mismatch")
+    if correlation_ids and re.search(r"statistically significant|not significant|insignificant", text_lower):
+        reasons.append("significance_requires_statistical_test")
+    # Compound conclusions need a typed assertion for each independent metric.
+    compound_mae = ("percentage" in text_lower or "percent" in text_lower) and "absolute" in text_lower and "error" in text_lower
+    assertions = assertion.get("assertions") if isinstance(assertion, dict) and assertion.get("kind") == "all" else [assertion]
+    if compound_mae:
+        checked_metrics = set()
+        for part in assertions if isinstance(assertions, list) else []:
+            if isinstance(part, dict) and part.get("kind") == "comparison":
+                a, b = part.get("left"), part.get("right")
+                if isinstance(a, str) and isinstance(b, str) and a in evidence and b in evidence:
+                    if evidence[a].get("metric") == evidence[b].get("metric"):
+                        checked_metrics.add(evidence[a].get("metric"))
+        if not {"mae_percent", "mae_absolute"} <= checked_metrics:
+            reasons.append("compound_claim_missing_assertions")
     if kind == "prediction":
         reasons.append("prediction_not_established_by_historical_evidence")
     if kind == "interpretation":
         reasons.append("interpretation_requires_independent_review")
-    if not isinstance(assertion, dict) or assertion.get("kind") not in {"comparison", "value"}:
+    if not isinstance(assertion, dict) or assertion.get("kind") not in {"comparison", "value", "all"}:
         reasons.append("missing_typed_assertion")
+    elif assertion["kind"] == "all":
+        parts = assertion.get("assertions")
+        if not isinstance(parts, list) or not parts or any(
+            not isinstance(p, dict) or p.get("kind") not in {"comparison", "value"} for p in parts
+        ):
+            reasons.append("invalid_compound_assertion")
+        else:
+            for part in parts:
+                subclaim = dict(claim, assertion=part, text="Numeric subassertion")
+                subaudit = verify_claim(subclaim, evidence)
+                if subaudit["status"] == "rejected":
+                    reasons.extend(subaudit["issues"])
     elif assertion["kind"] == "comparison":
         left, right, op = assertion.get("left"), assertion.get("right"), assertion.get("operator")
         if op not in COMPARISONS or left not in ids or right not in ids or left == right:
@@ -106,7 +144,9 @@ def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
         "invalid_comparison", "incompatible_metrics_or_units",
         "comparison_requires_distinct_populations", "comparison_contradicted",
         "invalid_evidence_value", "invalid_value_reference", "value_contradicted",
-        "missing_typed_assertion",
+        "missing_typed_assertion", "invalid_compound_assertion",
+        "compound_claim_missing_assertions", "correlation_variable_mismatch",
+        "significance_requires_statistical_test",
     )) else "review_required"
     return {"id": cid, "status": status, "issues": reasons,
             "numeric_check": "not_disproven" if status != "rejected" else "failed"}
