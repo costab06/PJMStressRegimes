@@ -187,22 +187,28 @@ async def investigate_with_model(frame, evidence: dict, model: str, base_url: st
 
 
 def render_investigation(hypothesis: dict, result: dict, followup: dict) -> str:
+    truth = verified_comparisons(result)
+    check = followup.get("verification", {"status": "unverified", "errors": ["Not checked"]})
     lines = ["", "## Hypothesis and follow-up investigation", "",
              "**Question selected by local model:** " + QUESTIONS[hypothesis["question"]], "",
-             "**Why investigate:** " + hypothesis["reason"], "",
+             "**Why investigate (model-generated):** " + hypothesis["reason"], "",
              "**Deterministic method:** " + result["method"], "",
              "**Computed follow-up evidence:**", "", "```json",
              json.dumps(result, indent=2), "```", "",
-             "**Reassessment:** " + followup["assessment"], "",
-             "**Evidence interpretation:** " + followup["supporting_evidence"], "",
-             "**Remaining uncertainty (model-generated):** " + followup["remaining_uncertainty"], "",
-             "**Additional data needed:** " + followup["next_data_needed"], "",
-             "The follow-up text is model-generated and requires human review; "
-             "the numerical investigation is deterministic.", ""])
-    if followup.get("structured_fields"):
-        lines.extend(["", "**Review required:** Structured model output was formatted for display, not independently verified.", ""])
-    if followup.get("incomplete"):
-        lines.extend(["", "**Review required:** The local model left one or more follow-up fields unanswered.", ""])
+             render_verified_comparisons(truth), ""]
+    if check["status"] == "verified":
+        lines.extend(["**Model reassessment (structured claims verified; prose unverified):** "
+                      + followup["assessment"], "",
+                      "**Model evidence interpretation (unverified prose):** "
+                      + followup["supporting_evidence"], ""])
+    else:
+        lines.extend(["**Model reassessment withheld:** Structured claims failed deterministic verification.", "",
+                      "**Verification errors:** " + "; ".join(check["errors"]), ""])
+    lines.extend(["**Remaining uncertainty (model-generated):** " + followup["remaining_uncertainty"], "",
+                  "**Additional data needed (model-generated):** " + followup["next_data_needed"], "",
+                  "**Verification scope:** Only enumerated directional comparisons are checked. "
+                  "Free-form explanations, causal implications, and numerical statements "
+                  "outside the structured claims are not semantically verified.", ""])
     return "\n".join(lines)
 
 
