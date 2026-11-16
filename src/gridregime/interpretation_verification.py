@@ -71,7 +71,7 @@ def verify_claim(claim: dict, evidence: dict[str, dict]) -> dict:
     if correlation_ids and "between" in text_lower:
         # This metric is specifically demand-change versus interchange-level,
         # not forecast versus actual. Require both measured concepts.
-        if not (re.search(r"demand\\s+chang", text_lower) and
+        if not (re.search(r"demand\s+chang", text_lower) and
                 re.search(r"interchange", text_lower)):
             reasons.append("correlation_variable_mismatch")
     if correlation_ids and re.search(r"statistically significant|not significant|insignificant", text_lower):
