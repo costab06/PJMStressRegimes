@@ -86,3 +86,25 @@ def test_compound_claim_requires_both_correct_comparisons():
     result = audit(compound(bad))
     assert result["audits"][0]["status"] == "rejected"
     assert "comparison_contradicted" in result["audits"][0]["issues"]
+
+
+def test_live_v2_prose_absolute_mae_cannot_cite_percentage_error():
+    wrong = claim(
+        "C1", "The mean absolute error (MAE) is lower during high demand compared to other hours.",
+        ["E_PCT_HIGH", "E_PCT_OTHER"],
+        comparison("E_PCT_HIGH", "E_PCT_OTHER", "lt"),
+        kind="interpretation",
+    )
+    result = audit(wrong)
+    assert result["audits"][0]["status"] == "rejected"
+    assert "prose_metric_identity_mismatch" in result["audits"][0]["issues"]
+
+
+def test_live_v2_correct_absolute_mae_prose_remains_reviewable():
+    correct = claim(
+        "C2", "The absolute mean error (MAE) is higher during high demand compared to other hours.",
+        ["E_ABS_HIGH", "E_ABS_OTHER"],
+        comparison("E_ABS_HIGH", "E_ABS_OTHER", "gt"),
+        kind="interpretation",
+    )
+    assert audit(correct)["audits"][0]["status"] == "review_required"
