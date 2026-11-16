@@ -94,3 +94,13 @@ The article's claim is **architectural portability**, not predictive performance
 ## Where the experiments went
 
 All experimental modeling, threshold sweeps, notebooks, historical catalogs, and manuscript material remain in the full research history on `modeling/01-core-contracts-and-adapters`. This branch deliberately contains only the reader-facing example and its essential adapters.
+
+### Deterministic semantic verification
+
+The follow-up local model now supplies structured comparison directions. The
+application independently calculates the expected directions and rejects
+contradictory or missing claims. Verified numerical comparisons are generated
+by deterministic Python code; free-form model prose is explicitly **not**
+semantically verified. If the model fails the comparison check, its reassessment
+is withheld from the Markdown report while raw output and verification status
+remain available in `grid_followup_raw.txt` and `grid_investigation.json`.
