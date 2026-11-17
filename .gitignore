@@ -49,3 +49,10 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Local runtime and model artifacts
+results/demo/
+data/models/
+*.log
+.env.*
+!.env.example
