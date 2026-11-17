@@ -11,7 +11,8 @@ This is a working release gate, not a claim that all checks are complete.
 
 ## Before merging the open-source preparation PR
 
-- [ ] Review the **entire tracked tree**, including `git ls-files`, for proprietary or restricted datasets, private identifiers, credentials, large binaries, notebook outputs, and generated models. GitHub code search alone is insufficient.
+- [x] Review the tracked **filename inventory** supplied by the maintainer (`git ls-files`, 2026-11-17): source, tests, docs, configuration and license only; no filenames indicating tracked raw datasets, notebooks, model binaries or generated results. **Content inspection and history scanning remain pending.**
+- [ ] Inspect tracked file contents for secrets, private identifiers, copied third-party code, and nonredistributable material.
 - [ ] Inspect Git history for secrets and restricted data; deleting files in a new commit does **not** erase old history.
 - [ ] Verify third-party dataset and copied-code redistribution permissions and document required notices.
 - [ ] Verify clean checkout installation in a fresh virtual environment, including the pinned OAF checkout in GitHub Actions.
