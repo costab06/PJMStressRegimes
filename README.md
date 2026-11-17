@@ -2,7 +2,13 @@
 
 A small, reproducible example of how the same application architecture can be applied to **financial intelligence** and **electric-grid measurements**.
 
-This is **not** a grid-emergency predictor. The earlier detector research did not demonstrate an advantage over a simpler weather-and-demand model. The research is preserved on the `modeling/01-core-contracts-and-adapters` branch.
+This is **not** a grid-emergency predictor. The earlier detector research did not demonstrate an advantage over a simpler weather-and-demand model. The research and modeling code are preserved in the repository history and consolidated on `main`.
+
+## Project status and scope
+
+This repository contains a reproducible historical PJM case study, deterministic evidence/claim verification, OAF acquisition adapters, and optional Redis-backed operational training/inference. The operational stress score is descriptive and **not** an independently validated emergency forecast. Publication-time availability is not established for all historical observations. The model-promotion test simulates external validation; it is not an approval system.
+
+Python 3.12 is recommended when using the OAF integration. The standalone data demonstration supports the Python version declared in `pyproject.toml`. OAF is an optional sibling project and must be installed separately for OAF workflows.
 
 ## Start here: four steps
 
@@ -93,7 +99,7 @@ The article's claim is **architectural portability**, not predictive performance
 
 ## Where the experiments went
 
-All experimental modeling, threshold sweeps, notebooks, historical catalogs, and manuscript material remain in the full research history on `modeling/01-core-contracts-and-adapters`. This branch deliberately contains only the reader-facing example and its essential adapters.
+The historical modeling experiments, data catalogs, and architecture demonstration have been consolidated into `main`. They remain research artifacts, not evidence of predictive accuracy.
 
 ### Deterministic semantic verification
 
@@ -104,3 +110,25 @@ by deterministic Python code; free-form model prose is explicitly **not**
 semantically verified. If the model fails the comparison check, its reassessment
 is withheld from the Markdown report while raw output and verification status
 remain available in `grid_followup_raw.txt` and `grid_investigation.json`.
+
+## Test the consolidated repository
+
+```bash
+python -m pip install -e '.[dev]'
+python -m pytest tests/ -q
+```
+
+For the optional OAF tests, install the sibling `OpenAgentFabric` project into the same environment. To run the real Redis integration test, start a local Redis instance and then:
+
+```bash
+REDIS_URL=redis://localhost:6380/0 GRID_OAF_REDIS_TEST=1 \
+  python -m pytest tests/test_operational_redis_integration.py -v
+```
+
+The live Ollama smoke test is opt-in (`RUN_LIVE_LLM=1`) and requires a local model. Tests marked as skipped do not establish coverage of the corresponding external service.
+
+## Contributing and responsible use
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Avoid committing raw source datasets, API credentials, model artifacts, local results, or personal information. This code is a research demonstration; it is not intended for grid dispatch or other safety-critical decisions.
+
+**License:** A license has not yet been selected. Until a license is added, the repository is source-visible but is **not** licensed for unrestricted reuse or redistribution.
