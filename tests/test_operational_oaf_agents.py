@@ -40,6 +40,7 @@ async def test_oaf_training_and_inference_handler_contract(tmp_path):
     trainer=object.__new__(GridTrainingAgent)
     trainer.name='grid-model-trainer'
     trainer.artifact_dir=tmp_path/'models'
+    trainer.input_dir=tmp_path
     request=EventEnvelope(event_type=TRAIN_REQUESTED,source_agent='test',correlation_id=uuid4(),payload={'snapshot_path':str(path),'snapshot_sha256':digest,'model_version':'v1'})
     candidate_event=(await trainer.handle_event(request))[0]
     assert candidate_event.event_type==TRAIN_CANDIDATE
@@ -54,6 +55,7 @@ async def test_oaf_training_and_inference_handler_contract(tmp_path):
     worker=object.__new__(GridInferenceAgent)
     worker.name='grid-model-inference'
     worker.artifact_dir=trainer.artifact_dir
+    worker.input_dir=tmp_path
     event=EventEnvelope(event_type=INFER_REQUESTED,source_agent='test',correlation_id=uuid4(),payload={'snapshot_path':str(inference_path),'snapshot_sha256':inference_digest})
     result=(await worker.handle_event(event))[0]
     assert result.event_type==STRESS_SIGNAL
