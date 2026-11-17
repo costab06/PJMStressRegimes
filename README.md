@@ -132,3 +132,7 @@ The live Ollama smoke test is opt-in (`RUN_LIVE_LLM=1`) and requires a local mod
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Avoid committing raw source datasets, API credentials, model artifacts, local results, or personal information. This code is a research demonstration; it is not intended for grid dispatch or other safety-critical decisions.
 
 **License:** [Apache License, Version 2.0](LICENSE). See the license terms for reuse and redistribution. Third-party datasets and dependencies remain subject to their own licenses.
+
+## Operational worker input safety
+
+For Redis-backed workers, set `GRID_SNAPSHOT_INPUT_DIR` to a dedicated directory containing approved snapshot artifacts, or pass `--input-dir` to `gridregime.operational.run_worker`. The worker rejects snapshot paths outside that directory, including symlink escapes. Without this setting, path access remains unrestricted for compatibility with existing research runs. Do not expose Redis to untrusted publishers.
