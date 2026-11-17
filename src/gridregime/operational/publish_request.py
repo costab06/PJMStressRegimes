@@ -20,7 +20,7 @@ async def publish_request(*, kind: str, snapshots: str, model_version: str | Non
         await bus.redis.ping()
         event = EventEnvelope(event_type=descriptor['event_type'],
                               source_agent='grid-operational-producer',payload=descriptor['payload'])
-        await bus.publish(event,stream=stream)
+        await bus.publish(stream, event)
         return event
     finally:
         await bus.close()
