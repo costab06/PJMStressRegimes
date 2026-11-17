@@ -1,6 +1,6 @@
-# Redis runtime smoke test (integration branch)
+# Redis runtime smoke test (main)
 
-This runbook follows SECAgents' standalone OAF worker pattern. It is a **manual integration test**, not evidence that the runtime has already been exercised.
+This runbook follows SECAgents' standalone OAF worker pattern. It is a **manual operational smoke test**. The opt-in Redis integration test exercises the training/promotion/inference path, but does not establish production readiness.
 
 ## Prerequisites
 
@@ -8,6 +8,7 @@ This runbook follows SECAgents' standalone OAF worker pattern. It is a **manual 
 - Redis reachable at `REDIS_URL` (SECAgents development default `redis://localhost:6380/0`).
 - A JSON array of at least 24 valid, distinct `FeatureSnapshot` records for training, plus a separate one-record JSON array for inference. These are frozen-v1 **features**, not raw EIA-930 observations.
 - Use a dedicated test stream (e.g. `gridregime.smoke`) and isolated model artifact directory. All worker processes must share that directory.
+- Put input snapshots in a dedicated directory and set `GRID_SNAPSHOT_INPUT_DIR` to its absolute path in **both** workers. The worker rejects paths outside it.
 
 ## Start workers in two terminals
 
@@ -15,6 +16,7 @@ This runbook follows SECAgents' standalone OAF worker pattern. It is a **manual 
 export REDIS_URL=redis://localhost:6380/0
 export OAF_STREAM=gridregime.smoke
 export GRID_MODEL_ARTIFACT_DIR=data/operational-smoke/models
+export GRID_SNAPSHOT_INPUT_DIR=/absolute/path/to/snapshot-directory
 python -m gridregime.operational.run_worker training
 ```
 
@@ -60,5 +62,5 @@ The inference worker should emit `grid.stress.signal` with the model version, ob
 
 - A timer/cron integration is not configured by this code; scheduling is external.
 - No automatic candidate validation, signed approval, rollback, freshness enforcement or alert calibration.
-- Existing demo acquisition adapters are on a different branch and have not yet been integrated into this branch.
-- No claim of successful Redis integration testing until the above checks are executed.
+- Acquisition adapters and operational handlers are both present on `main`, but their combined end-to-end production pipeline is not validated.
+- Run the opt-in Redis test in your own environment: `GRID_OAF_REDIS_TEST=1 python -m pytest tests/test_operational_redis_integration.py -v`. The manual steps above exercise a separate deployment path.
