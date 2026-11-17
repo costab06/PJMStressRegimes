@@ -26,7 +26,7 @@ def events():
 def hourly(anchor="2022-12-23T22:30:00Z"):
     end=pd.Timestamp(anchor).floor("h")
     stamps=pd.date_range(end=end-pd.Timedelta(hours=1),periods=24,freq="h",tz="UTC")
-    frame=pd.DataFrame({"timestamp_utc":stamps})
+    frame=pd.DataFrame({"timestamp_utc":stamps, "episode_id":"ELL_2022", "severity":"S3"})
     for feature in FEATURES:
         frame[feature]=np.arange(24,dtype=float)
     return frame
@@ -45,7 +45,7 @@ def test_complete_window_excludes_action_hour():
     ell=next(e for e in report["episodes"] if e["episode_id"]=="ELL_2022")
     assert ell["status"]=="complete"
     assert ell["complete_hours"]==24
-    assert ell["LoadZ_delta"]==23.0
+    assert ell["load_z_delta"]==23.0
     assert report["independent_episodes"]==3
     assert report["by_severity"]=={"S1":1,"S2":1,"S3":1}
 
@@ -67,7 +67,7 @@ def test_missing_s1_anchor_not_fabricated():
 
 def test_duplicate_hourly_timestamp_rejected():
     data=hourly()
-    with pytest.raises(ValueError,match="duplicate_hourly_timestamp"):
+    with pytest.raises(ValueError,match="duplicate_episode_hourly_timestamp"):
         audit_timeseries(pd.concat([data,data.iloc[:1]]),events())
 
 
@@ -76,3 +76,19 @@ def test_conflicting_episode_severity_rejected():
     catalog.loc[1,"severity"]="S2"
     with pytest.raises(ValueError,match="inconsistent_episode_severity"):
         episode_anchors(catalog)
+
+
+def test_same_timestamp_different_episodes_allowed():
+    data=hourly()
+    second=data.copy()
+    second["episode_id"]="HEAT_2023"
+    second["severity"]="S2"
+    report=audit_timeseries(pd.concat([data,second],ignore_index=True),events())
+    assert report["independent_episodes"]==3
+
+
+def test_episode_severity_mismatch_rejected():
+    data=hourly()
+    data["severity"]="S2"
+    with pytest.raises(ValueError,match="episode_severity_mismatch"):
+        audit_timeseries(data,events())
