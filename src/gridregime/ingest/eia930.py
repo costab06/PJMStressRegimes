@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import time
+import random
 from pathlib import Path
 from typing import Literal
 
@@ -58,9 +59,19 @@ def _paginate(url: str, params: dict, page_size: int = 5000) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        resp = requests.get(url, params={**params, "offset": offset, "length": page_size}, timeout=30)
-        resp.raise_for_status()
-        page = resp.json().get("response", {}).get("data", [])
+        for attempt in range(5):
+            try:
+                resp = requests.get(url, params={**params, "offset": offset, "length": page_size}, timeout=90)
+                resp.raise_for_status()
+                page = resp.json().get("response", {}).get("data", [])
+                break
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
+                    requests.exceptions.HTTPError) as exc:
+                if isinstance(exc, requests.exceptions.HTTPError) and exc.response is not None and exc.response.status_code not in (429, 500, 502, 503, 504):
+                    raise
+                if attempt == 4:
+                    raise RuntimeError(f"EIA request failed after 5 attempts, offset={offset}") from exc
+                time.sleep(min(2 ** attempt, 16) + random.uniform(0, 0.5))
         rows.extend(page)
         if len(page) < page_size:
             break
@@ -167,6 +178,21 @@ def fetch_generation_by_fuel(
 # High-level: fetch and merge all series for a window, with monthly caching
 # ---------------------------------------------------------------------------
 
+def _require_complete_month(frame: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> None:
+    """Reject partial cached months, including absent or null required series."""
+    required = ("timestamp_utc", "demand_mwh", "forecast_mwh", "interchange_mwh")
+    if any(c not in frame.columns for c in required):
+        raise ValueError("Missing required source columns")
+    ts = pd.to_datetime(frame["timestamp_utc"], utc=True)
+    expected = pd.date_range(start, end, freq="h", tz="UTC")
+    if ts.duplicated().any() or not pd.DatetimeIndex(ts.sort_values()).equals(expected):
+        raise ValueError("Incomplete or duplicate hourly timestamps")
+    if frame[list(required[1:])].isna().any().any():
+        raise ValueError("Null mandatory source observations")
+    if frame["forecast_mwh"].le(0).any():
+        raise ValueError("Nonpositive demand forecast")
+
+
 def fetch_window(
     ba: str,
     start: str,
@@ -233,39 +259,45 @@ def fetch_window(
         month_end = month_start.replace(year=next_y, month=next_m) - pd.Timedelta(hours=1)
         cache_path = cache_dir / f"{ba}_{month_start.strftime('%Y-%m')}.parquet"
         if cache_path.exists():
-            month_dfs.append(pd.read_parquet(cache_path))
-            continue
+            cached = pd.read_parquet(cache_path)
+            try:
+                _require_complete_month(cached, month_start, month_end)
+            except ValueError as exc:
+                print(f"  Incomplete cache {cache_path.name}: {exc}; refetching")
+            else:
+                month_dfs.append(cached)
+                continue
 
         # Fetch all types for this month
         fetch_start = month_start.strftime("%Y-%m-%dT%H")
         fetch_end = month_end.strftime("%Y-%m-%dT%H")
 
         region_dfs = []
-        for dtype in ("D", "DF", "NG", "TI"):
-            try:
-                region_dfs.append(fetch_region_type(ba, dtype, fetch_start, fetch_end))
-            except Exception as exc:
-                print(f"  Warning: {ba} {dtype} {month_start.date()} failed: {exc}")
-
-        if not region_dfs:
-            continue
-
+        for dtype in ("D", "DF", "TI"):
+            # These three sources are mandatory for the frozen-v1 vector.
+            region_dfs.append(fetch_region_type(ba, dtype, fetch_start, fetch_end))
         merged = region_dfs[0]
         for rdf in region_dfs[1:]:
             merged = merged.merge(rdf, on=["timestamp_utc", "ba"], how="outer")
-
         if not skip_generation:
             try:
-                gen_df = fetch_generation_by_fuel(ba, fetch_start, fetch_end)
-                merged = merged.merge(gen_df, on=["timestamp_utc", "ba"], how="outer")
+                gen = fetch_region_type(ba, "NG", fetch_start, fetch_end)
+                merged = merged.merge(gen, on=["timestamp_utc", "ba"], how="left")
+                fuel = fetch_generation_by_fuel(ba, fetch_start, fetch_end)
+                merged = merged.merge(fuel, on=["timestamp_utc", "ba"], how="left")
             except Exception as exc:
-                print(f"  Warning: {ba} fuel-type {month_start.date()} failed: {exc}")
-
+                print(f"  Optional generation acquisition failed: {exc}")
         merged = merged.sort_values("timestamp_utc").reset_index(drop=True)
-        if merged.empty:
-            print(f"  Warning: API returned 0 rows for {ba} {month_start.strftime('%Y-%m')} — not caching.")
-            continue
-        merged.to_parquet(cache_path, index=False)
+        _require_complete_month(merged, month_start, month_end)
+        # Replace only after a fully validated replacement has been written.
+        import tempfile
+        with tempfile.NamedTemporaryFile(dir=cache_dir, suffix=".parquet", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            merged.to_parquet(tmp_path, index=False)
+            os.replace(tmp_path, cache_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
         month_dfs.append(merged)
 
     if not month_dfs:
