@@ -6,6 +6,7 @@ alter deterministic decisions, or certify natural-language entailment.
 from __future__ import annotations
 
 from copy import deepcopy
+from gridregime.interpretation_provenance import prepare_cited_evidence
 import json
 from urllib.request import Request, urlopen
 
@@ -92,7 +93,8 @@ def review_audit(audit: dict, *, model: str = "qwen3:8b",
         claim = claims[cid]
         ids = claim.get("evidence_ids", [])
         ids = ids if isinstance(ids, list) else []
-        cited = [catalog[i] for i in ids if isinstance(i, str) and i in catalog]
+        cited = [prepare_cited_evidence(catalog[i]) for i in ids
+                 if isinstance(i, str) and i in catalog]
         if item["status"] == "rejected":
             item["semantic_review"] = {
                 "verdict": "not_run", "reason": "deterministic_rejection",
