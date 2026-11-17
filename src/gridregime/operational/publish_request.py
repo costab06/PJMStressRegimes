@@ -7,6 +7,8 @@ import argparse
 import asyncio
 import os
 from shared.eventbus.events import EventEnvelope
+from shared.correlation.registry import CorrelationRegistry
+from datetime import datetime, timezone
 from shared.eventbus.redis import RedisEventBus
 from .requests import request_for_artifact
 
@@ -18,8 +20,17 @@ async def publish_request(*, kind: str, snapshots: str, model_version: str | Non
     bus = RedisEventBus(redis_url=redis_url)
     try:
         await bus.redis.ping()
+        registry = CorrelationRegistry(bus.redis)
+        correlation = await registry.create(
+            trigger_type=descriptor['event_type'],
+            trigger_timestamp=datetime.now(timezone.utc),
+            business_fields={'snapshot_sha256':descriptor['payload']['snapshot_sha256'],
+                             'model_version':descriptor['payload'].get('model_version')},
+        )
         event = EventEnvelope(event_type=descriptor['event_type'],
-                              source_agent='grid-operational-producer',payload=descriptor['payload'])
+                              source_agent='grid-operational-producer',
+                              correlation_id=correlation.correlation_id,
+                              payload=descriptor['payload'])
         await bus.publish(stream, event)
         return event
     finally:
