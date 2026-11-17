@@ -24,17 +24,18 @@ def _reply(agent, event, kind, payload):
 
 
 class GridTrainingAgent(BaseAgent):
-    def __init__(self, *, artifact_dir: str | Path, **kwargs):
+    def __init__(self, *, artifact_dir: str | Path, input_dir: str | Path | None = None, **kwargs):
         super().__init__(name='grid-model-trainer', subscribed_event_types={TRAIN_REQUESTED},
                          completion_event_type=TRAIN_CANDIDATE, **kwargs)
         self.artifact_dir = Path(artifact_dir)
+        self.input_dir = Path(input_dir) if input_dir is not None else None
 
     async def handle_event(self, event: EventEnvelope) -> list[EventEnvelope]:
         if event.event_type != TRAIN_REQUESTED or not isinstance(event.payload, dict):
             raise ValueError('invalid training request')
         p = event.payload
         snapshots = await asyncio.to_thread(read_snapshots, p['snapshot_path'],
-                                            expected_sha256=p['snapshot_sha256'])
+                                            expected_sha256=p['snapshot_sha256'], allowed_root=self.input_dir)
         candidate = await asyncio.to_thread(train_reference_model, snapshots,
             artifact_dir=self.artifact_dir, model_version=p['model_version'],
             quantile=p.get('quantile', 0.95))
