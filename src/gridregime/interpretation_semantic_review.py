@@ -17,8 +17,22 @@ causal overreach, and unsupported significance claims. Do not invent data.
 A matching number alone does not prove the prose. Return JSON ONLY:
 {"verdict":"supported|unsupported|uncertain","reason":"short explanation",
 "cited_evidence_ids":["IDs actually used"]}.
-Use 'supported' only if every part follows directly from evidence. If evidence
-is insufficient, return uncertain. 'supported' is advisory, NOT approval.
+Judge whether the CLAIM AS WORDED is justified by the supplied evidence,
+not whether the proposition could possibly be true in the real world.
+- supported: every material assertion follows from the cited evidence, within
+  its measured variables, population, time scope, and strength of inference.
+- unsupported: any material assertion goes beyond, misstates, or contradicts
+  the evidence. This includes claims of proof, causation, intent, universal
+  scope, regional scope, future guarantees, or statistical significance when
+  the necessary supporting measurements or tests are absent. A proposition
+  can be unsupported without being proven false.
+- uncertain: the available evidence or the claim's wording is genuinely
+  ambiguous, so you cannot confidently decide whether the claim is supported.
+  Do NOT use uncertain merely because an unsupported claim might be true with
+  additional evidence. Missing evidence for a definite claim is unsupported.
+Evaluate every independent clause; the weakest unsupported material clause
+determines the verdict. The structured assertion may be numerically correct
+while the prose is unsupported. 'supported' is advisory, NOT approval.
 """
 
 
