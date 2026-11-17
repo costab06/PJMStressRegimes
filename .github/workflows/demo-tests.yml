@@ -2,7 +2,7 @@ name: Architecture demonstration
 
 on:
   push:
-    branches: [demo/architecture-case-study]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
