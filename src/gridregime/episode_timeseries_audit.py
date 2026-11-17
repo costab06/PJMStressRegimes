@@ -1,12 +1,12 @@
 """Audit frozen v1 PJM time-series coverage around independent episodes.
 
-Input must contain precomputed, *validated* LoadZ, ForecastErrorZ, RampZ,
-InterchangeZ and a timezone-aware timestamp_utc column. This script does not
+Input must contain precomputed, *validated* load_z, fe_z, ramp3_z,
+ic_z, episode_id and a timezone-aware timestamp_utc column. This script does not
 recompute the frozen 2021 hour×month baseline, infer event severity, or train
 a model. It audits alignment and summarizes descriptive pre-anchor trajectories.
 
 Usage:
- python -m gridregime.episode_timeseries_audit --hourly data/processed/FEATURES.csv
+ python -m gridregime.episode_timeseries_audit
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-FEATURES = ("LoadZ", "ForecastErrorZ", "RampZ", "InterchangeZ")
+FEATURES = ("load_z", "fe_z", "ramp3_z", "ic_z")
 
 
 def _utc(value):
@@ -58,19 +58,24 @@ def audit_timeseries(hourly: pd.DataFrame, events: pd.DataFrame,
     """Only complete, pre-anchor hourly data enter descriptive summaries."""
     if pre_hours < 2:
         raise ValueError("pre_hours_must_be_at_least_two")
-    needed = {"timestamp_utc", *FEATURES}
+    needed = {"timestamp_utc", "episode_id", *FEATURES}
     if needed - set(hourly.columns):
         raise ValueError(f"hourly_missing_columns:{sorted(needed - set(hourly.columns))}")
     frame = hourly.copy()
     frame["timestamp_utc"] = pd.to_datetime(frame["timestamp_utc"], utc=True, errors="raise")
     if frame["timestamp_utc"].isna().any():
         raise ValueError("invalid_hourly_timestamp")
-    if frame["timestamp_utc"].duplicated().any():
-        raise ValueError("duplicate_hourly_timestamp")
+    if frame.duplicated(subset=["episode_id", "timestamp_utc"]).any():
+        raise ValueError("duplicate_episode_hourly_timestamp")
+    if "severity" in frame.columns:
+        catalog_severity = events.groupby("episode_id")["severity"].first().to_dict()
+        mismatch = frame["severity"].ne(frame["episode_id"].map(catalog_severity))
+        if mismatch.any():
+            raise ValueError("episode_severity_mismatch")
     for feature in FEATURES:
         frame[feature] = pd.to_numeric(frame[feature], errors="raise")
         frame[feature] = frame[feature].replace([np.inf, -np.inf], np.nan)
-    frame = frame.set_index("timestamp_utc").sort_index()
+    frame = frame.set_index(["episode_id", "timestamp_utc"]).sort_index()
     records = []
     for item in episode_anchors(events).to_dict("records"):
         anchor = item["anchor_utc"]
@@ -86,7 +91,12 @@ def audit_timeseries(hourly: pd.DataFrame, events: pd.DataFrame,
         end = anchor.floor("h")
         expected = pd.date_range(end=end - pd.Timedelta(hours=1),
                                  periods=pre_hours, freq="h", tz="UTC")
-        window = frame.reindex(expected)[list(FEATURES)]
+        episode = item["episode_id"]
+        if episode in frame.index.get_level_values("episode_id"):
+            episode_frame = frame.xs(episode, level="episode_id")
+            window = episode_frame.reindex(expected)[list(FEATURES)]
+        else:
+            window = pd.DataFrame(index=expected, columns=list(FEATURES), dtype=float)
         valid = window.notna().all(axis=1)
         record.update({"observed_hours": int(window.notna().any(axis=1).sum()),
                        "complete_hours": int(valid.sum()),
@@ -115,14 +125,17 @@ def audit_timeseries(hourly: pd.DataFrame, events: pd.DataFrame,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--hourly", required=True, type=Path,
-                        help="CSV of validated frozen-v1 hourly z-score features")
+    parser.add_argument("--hourly", type=Path,
+                        default=Path("data/processed/episode_features_unique.parquet"),
+                        help="Episode-keyed Parquet or CSV of validated frozen-v1 hourly features")
     parser.add_argument("--events", type=Path, default=Path("metadata/events.csv"))
     parser.add_argument("--pre-hours", type=int, default=24)
     parser.add_argument("--output", type=Path,
                         default=Path("results/episode-timeseries-audit.json"))
     args = parser.parse_args()
-    result = audit_timeseries(pd.read_csv(args.hourly), pd.read_csv(args.events),
+    hourly = (pd.read_parquet(args.hourly) if args.hourly.suffix.lower() == ".parquet"
+              else pd.read_csv(args.hourly))
+    result = audit_timeseries(hourly, pd.read_csv(args.events),
                               pre_hours=args.pre_hours)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
