@@ -43,17 +43,18 @@ class GridTrainingAgent(BaseAgent):
 
 
 class GridInferenceAgent(BaseAgent):
-    def __init__(self, *, artifact_dir: str | Path, **kwargs):
+    def __init__(self, *, artifact_dir: str | Path, input_dir: str | Path | None = None, **kwargs):
         super().__init__(name='grid-model-inference', subscribed_event_types={INFER_REQUESTED},
                          completion_event_type=STRESS_SIGNAL, **kwargs)
         self.artifact_dir = Path(artifact_dir)
+        self.input_dir = Path(input_dir) if input_dir is not None else None
 
     async def handle_event(self, event: EventEnvelope) -> list[EventEnvelope]:
         if event.event_type != INFER_REQUESTED or not isinstance(event.payload, dict):
             raise ValueError('invalid inference request')
         p = event.payload
         snapshots = await asyncio.to_thread(read_snapshots, p['snapshot_path'],
-                                            expected_sha256=p['snapshot_sha256'])
+                                            expected_sha256=p['snapshot_sha256'], allowed_root=self.input_dir)
         if len(snapshots) != 1:
             raise ValueError('inference request must contain exactly one snapshot')
         signal = await asyncio.to_thread(infer_active, snapshots[0],
