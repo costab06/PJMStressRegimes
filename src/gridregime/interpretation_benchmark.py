@@ -94,8 +94,10 @@ def benchmark_cases():
     return c
 
 
-def evaluate(cases, *, semantic_review=False, model="qwen3:8b", reviewer=None):
-    document = {"evidence": DEMO_EVIDENCE, "claims": [c["claim"] for c in cases]}
+def evaluate(cases, *, semantic_review=False, model="qwen3:8b", reviewer=None,
+             evidence=None):
+    document = {"evidence": DEMO_EVIDENCE if evidence is None else evidence,
+                "claims": [c["claim"] for c in cases]}
     audit = audit_interpretation(document)
     if semantic_review:
         audit = review_audit(audit, model=model, reviewer=reviewer)
