@@ -131,4 +131,4 @@ The live Ollama smoke test is opt-in (`RUN_LIVE_LLM=1`) and requires a local mod
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Avoid committing raw source datasets, API credentials, model artifacts, local results, or personal information. This code is a research demonstration; it is not intended for grid dispatch or other safety-critical decisions.
 
-**License:** A license has not yet been selected. Until a license is added, the repository is source-visible but is **not** licensed for unrestricted reuse or redistribution.
+**License:** [Apache License, Version 2.0](LICENSE). See the license terms for reuse and redistribution. Third-party datasets and dependencies remain subject to their own licenses.
