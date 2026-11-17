@@ -63,6 +63,37 @@ EVIDENCE = [
      "description":"Section 2 describes exploratory heterogeneous forecast-error precursors in Elliott 2022 versus July 2026; motivates multivariate hypothesis, not predictive proof."},
 ]
 
+# Source-level provenance is attached to each cited fact, not to the prompt.
+# The research specification is dated 2026-10-01; the manuscript section
+# has no asserted publication date in this fixture.
+for _fact in EVIDENCE:
+    if _fact["source"] == SOURCE:
+        _fact["provenance"] = {
+            "document": SOURCE,
+            "section": ("model_plan.modeling_gate" if _fact["id"] in
+                        {"H_S3", "H_S2", "H_S1", "H_TOTAL", "H_PENDING", "H_GATE"}
+                        else "feature_freeze" if _fact["id"] in
+                        {"H_FEATURES", "H_DERIVED", "H_WEATHER", "H_NEIGHBOR"}
+                        else "unit_of_observation" if _fact["id"] == "H_EPISODE"
+                        else "discrimination_targets" if _fact["id"] == "H_PRIMARY"
+                        else "model_plan" if _fact["id"] == "H_DEFERRED"
+                        else "hypothesis"),
+            "source_date": "2026-10-01",
+            "evidence_status": ("exploratory_finding" if _fact["id"] == "H_EXPLORATORY"
+                                else "planned" if _fact["id"] in
+                                {"H_DEFERRED", "H_WEATHER", "H_NEIGHBOR"}
+                                else "methodological_definition" if _fact["id"] in
+                                {"H_FEATURES", "H_DERIVED", "H_PRIMARY", "H_EPISODE", "H_GATE"}
+                                else "observation"),
+        }
+    else:
+        _fact["provenance"] = {
+            "document": "paper/manuscript.md",
+            "section": "2. Exploratory Observations",
+            "evidence_status": "exploratory_finding",
+        }
+
+
 
 def _claim(cid, expected, category, text, eid):
     e = next(x for x in EVIDENCE if x["id"] == eid)
