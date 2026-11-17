@@ -6,6 +6,7 @@ Unverifiable claims are withheld, never silently promoted to verified.
 from __future__ import annotations
 
 from copy import deepcopy
+from gridregime.interpretation_provenance import validate_provenance
 from gridregime.interpretation_stages import (
     verify_numerical_assertion, verify_evidence_identity, verify_prose_consistency,
 )
@@ -74,10 +75,18 @@ def audit_interpretation(document: dict) -> dict:
             if item["id"] in evidence:
                 raise ValueError("duplicate_evidence_catalog_id")
             evidence[item["id"]] = item
+    provenance_issues = {eid: validate_provenance(e) for eid, e in evidence.items()}
     claims = document.get("claims", [])
     if not isinstance(claims, list):
         raise ValueError("claims_must_be_list")
     audits = [verify_claim(c, evidence) for c in claims]
+    for claim, item in zip(claims, audits):
+        ids = claim.get("evidence_ids", [])
+        ids = ids if isinstance(ids, list) else []
+        if any(provenance_issues.get(i) for i in ids if isinstance(i, str)):
+            item["issues"].append("invalid_evidence_provenance")
+            item["status"] = "rejected"
+            item["numeric_check"] = "failed"
     return {"source": original, "audits": audits,
             "publication": [],
             "status": "requires_independent_claim_review",
